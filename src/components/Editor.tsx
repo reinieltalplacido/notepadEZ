@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
-import { Note, ViewMode, Folder, Tag, NoteRevision } from '../types/note';
+import { Note, ViewMode, Folder, Tag, NoteRevision, AttachmentFile } from '../types/note';
 import { renderMarkdown } from '../utils/markdown';
 import { StatsBar } from './StatsBar';
 import { FindReplaceBar } from './FindReplaceBar';
@@ -32,6 +32,11 @@ import {
   History,
   Maximize2,
   Minimize2,
+  Paperclip,
+  Image as ImageIcon,
+  File,
+  Download,
+  Trash2,
 } from 'lucide-react';
 
 interface EditorProps {
@@ -46,6 +51,9 @@ interface EditorProps {
   onRestoreRevision?: (id: string, revision: NoteRevision) => void;
   isFullScreen?: boolean;
   onToggleFullScreen?: () => void;
+  editorWidth?: 'compact' | 'comfortable' | 'full';
+  onAddAttachment?: (noteId: string, file: AttachmentFile) => void;
+  onRemoveAttachment?: (noteId: string, attachmentId: string) => void;
 }
 
 export const Editor: React.FC<EditorProps> = ({
@@ -60,8 +68,12 @@ export const Editor: React.FC<EditorProps> = ({
   onRestoreRevision,
   isFullScreen = false,
   onToggleFullScreen,
+  editorWidth = 'full',
+  onAddAttachment,
+  onRemoveAttachment,
 }) => {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Search & Replace state
   const [isFindOpen, setIsFindOpen] = useState(false);
@@ -897,6 +909,39 @@ export const Editor: React.FC<EditorProps> = ({
           <Link className="w-3.5 h-3.5" />
         </button>
         <button
+          onClick={() => fileInputRef.current?.click()}
+          className="p-1.5 rounded-lg hover:bg-white/10 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition"
+          title="Attach File (Images, PDFs, Code, Screenshots)"
+        >
+          <Paperclip className="w-3.5 h-3.5 text-[var(--accent)]" />
+        </button>
+        <input
+          type="file"
+          ref={fileInputRef}
+          onChange={(e) => {
+            const files = e.target.files;
+            if (!files || files.length === 0 || !note || !onAddAttachment) return;
+            const file = files[0];
+            const reader = new FileReader();
+            reader.onload = (event) => {
+              const url = event.target?.result as string;
+              const attachment: AttachmentFile = {
+                id: `att-${Date.now()}`,
+                name: file.name,
+                size: file.size,
+                type: file.type || 'application/octet-stream',
+                url: url,
+                createdAt: Date.now(),
+              };
+              onAddAttachment(note.id, attachment);
+            };
+            reader.readAsDataURL(file);
+            e.target.value = '';
+          }}
+          className="hidden"
+        />
+
+        <button
           onClick={() => execRichFormat('insertHTML', `<span>🕒 ${new Date().toLocaleString()}</span>&nbsp;`)}
           className="p-1.5 rounded-lg hover:bg-white/10 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition"
           title="Insert timestamp"
@@ -923,15 +968,73 @@ export const Editor: React.FC<EditorProps> = ({
       <div className="flex-1 flex overflow-hidden relative">
         {/* Unified Clean Rich Text Canvas */}
         <div className="flex-1 h-full p-6 overflow-y-auto bg-[var(--bg-primary)]">
-          <div
-            ref={previewRef}
-            contentEditable={true}
-            suppressContentEditableWarning
-            onInput={handlePreviewInput}
-            onPaste={handlePaste}
-            onClick={handleCanvasClick}
-            className={`markdown-preview outline-none leading-relaxed text-sm ${fontClassMap[font] || 'font-sans'} cursor-text min-h-[500px] p-3 rounded-xl focus:ring-1 focus:ring-[var(--accent)]/20 transition`}
-          />
+          <div className={`${editorWidth === 'compact' ? 'max-w-2xl mx-auto' : editorWidth === 'comfortable' ? 'max-w-4xl mx-auto' : 'w-full'} space-y-4`}>
+            <div
+              ref={previewRef}
+              contentEditable={true}
+              suppressContentEditableWarning
+              onInput={handlePreviewInput}
+              onPaste={handlePaste}
+              onClick={handleCanvasClick}
+              className={`markdown-preview outline-none leading-relaxed text-sm ${fontClassMap[font] || 'font-sans'} cursor-text min-h-[450px] p-3 rounded-xl focus:ring-1 focus:ring-[var(--accent)]/20 transition`}
+            />
+
+            {/* Note Attachments Section */}
+            {note.attachments && note.attachments.length > 0 && (
+              <div className="border-t border-[var(--border-color)] pt-4 space-y-2">
+                <div className="text-xs font-semibold text-[var(--text-muted)] flex items-center gap-1.5 uppercase tracking-wider">
+                  <Paperclip className="w-3.5 h-3.5 text-[var(--accent)]" />
+                  <span>Attachments ({note.attachments.length})</span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+                  {note.attachments.map((att) => {
+                    const isImg = att.type.startsWith('image/');
+                    return (
+                      <div
+                        key={att.id}
+                        className="flex items-center justify-between p-2.5 rounded-xl bg-[var(--bg-secondary)] border border-[var(--border-color)] text-xs group hover:border-[var(--accent)] transition"
+                      >
+                        <div className="flex items-center gap-2 truncate">
+                          {isImg ? (
+                            <ImageIcon className="w-4 h-4 text-emerald-400 shrink-0" />
+                          ) : (
+                            <File className="w-4 h-4 text-cyan-400 shrink-0" />
+                          )}
+                          <div className="truncate">
+                            <p className="font-medium text-[var(--text-primary)] truncate">{att.name}</p>
+                            <p className="text-[10px] text-[var(--text-muted)] font-mono">
+                              {(att.size / 1024).toFixed(1)} KB
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-1 shrink-0">
+                          <a
+                            href={att.url}
+                            download={att.name}
+                            className="p-1 rounded hover:bg-white/10 text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+                            title="Download Attachment"
+                          >
+                            <Download className="w-3.5 h-3.5" />
+                          </a>
+                          {onRemoveAttachment && (
+                            <button
+                              onClick={() => onRemoveAttachment(note.id, att.id)}
+                              className="p-1 rounded hover:bg-rose-500/20 text-[var(--text-muted)] hover:text-rose-400"
+                              title="Delete Attachment"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Outline / Table of Contents Panel */}

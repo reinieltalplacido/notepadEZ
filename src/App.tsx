@@ -29,7 +29,10 @@ export function App() {
     setToast,
     showToast,
     createNote,
+    createNoteFromTemplate,
     updateNote,
+    addAttachment,
+    removeAttachment,
     deleteNote,
     restoreNote,
     permanentDeleteNote,
@@ -52,6 +55,7 @@ export function App() {
   const [isFullScreen, setIsFullScreen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isNoteListOpen, setIsNoteListOpen] = useState(true);
 
   const toggleFullScreen = () => {
     setIsFullScreen((prev) => {
@@ -154,9 +158,20 @@ export function App() {
   // Global Keyboard Shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+      // Ctrl+Shift+P or Ctrl+K -> Command Palette
+      if ((e.ctrlKey || e.metaKey) && (e.key.toLowerCase() === 'k' || (e.shiftKey && e.key.toLowerCase() === 'p'))) {
         e.preventDefault();
         setIsCommandPaletteOpen((prev) => !prev);
+      }
+      // Ctrl+Shift+B -> Toggle Note List
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'b') {
+        e.preventDefault();
+        setIsNoteListOpen((prev) => !prev);
+      }
+      // Ctrl+B -> Toggle Sidebar Navigation
+      else if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 'b') {
+        e.preventDefault();
+        setIsSidebarOpen((prev) => !prev);
       }
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'n') {
         e.preventDefault();
@@ -199,7 +214,7 @@ export function App() {
           activeNoteId={activeNoteId}
           onSelectTab={(id) => setActiveNoteId(id)}
           onCloseTab={(id) => closeTab(id)}
-          onNewTab={() => createNote()}
+          onNewTab={(templateType) => createNoteFromTemplate(templateType || 'blank')}
           activeNote={activeNote}
           onUpdateNote={updateNote}
           onOpenSettings={() => setIsSettingsOpen(true)}
@@ -209,6 +224,8 @@ export function App() {
           onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
           isSidebarOpen={isSidebarOpen}
           onOpenFocusMode={() => setIsFocusModeOpen(true)}
+          onDuplicateNote={duplicateNote}
+          onTogglePin={togglePin}
         />
       )}
 
@@ -228,11 +245,12 @@ export function App() {
             onDeleteTag={deleteTag}
             collapsed={sidebarCollapsed}
             setCollapsed={setSidebarCollapsed}
+            onUpdateNoteFolder={(noteId, folderId) => updateNote(noteId, { folderId })}
           />
         )}
 
         {/* Note List Cards (Hidden in Full Screen) */}
-        {!isFullScreen && isSidebarOpen && (
+        {!isFullScreen && isSidebarOpen && isNoteListOpen && (
           <NoteList
             notes={filteredNotes}
             activeNoteId={activeNoteId}
@@ -248,6 +266,7 @@ export function App() {
             onDeleteNote={deleteNote}
             onRestoreNote={restoreNote}
             onPermanentDeleteNote={permanentDeleteNote}
+            onUpdateNoteFolder={(noteId, folderId) => updateNote(noteId, { folderId })}
           />
         )}
 
@@ -264,6 +283,9 @@ export function App() {
           onRestoreRevision={restoreRevision}
           isFullScreen={isFullScreen}
           onToggleFullScreen={toggleFullScreen}
+          editorWidth={settings.editorWidth}
+          onAddAttachment={addAttachment}
+          onRemoveAttachment={removeAttachment}
         />
       </div>
 

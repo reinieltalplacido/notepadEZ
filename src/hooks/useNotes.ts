@@ -1,5 +1,6 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
-import { Note, Folder, Tag, NoteFilter, AppSettings, NoteRevision } from '../types/note';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { Note, Folder, Tag, NoteFilter, AppSettings, NoteRevision, TemplateType, AttachmentFile } from '../types/note';
+import { NOTE_TEMPLATES } from '../utils/templates';
 import {
   loadNotesFromStorage,
   saveNotesToStorage,
@@ -199,32 +200,107 @@ export function useNotes() {
     return notes.find((n) => n.id === activeNoteId) || null;
   }, [notes, activeNoteId]);
 
+  // Auto-Snapshot Timer Ref
+  const autoSnapshotTimerRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+
   // Actions
-  const createNote = useCallback((folderId?: string) => {
+  const createNoteFromTemplate = useCallback((templateType: TemplateType = 'blank', folderId?: string) => {
+    const tmpl = NOTE_TEMPLATES.find((t) => t.type === templateType) || NOTE_TEMPLATES[0];
     const newNote: Note = {
       id: `note-${Date.now()}`,
-      title: 'Untitled Note',
-      content: '',
-      folderId: folderId || filter.folderId || undefined,
-      tags: [],
+      title: tmpl.defaultTitle,
+      content: tmpl.defaultContent,
+      folderId: folderId || filter.folderId || tmpl.folderId || undefined,
+      tags: tmpl.tags || [],
       isPinned: false,
       isFavorite: false,
       createdAt: Date.now(),
       updatedAt: Date.now(),
       wordTargetGoal: settings.wordGoal,
+      template: templateType,
+      attachments: [],
     };
 
     setNotes((prev) => [newNote, ...prev]);
     setActiveNoteId(newNote.id);
-    showToast('New note created', 'success');
+    showToast(`Created note from ${tmpl.label}`, 'success');
     return newNote;
   }, [filter.folderId, settings.wordGoal, showToast]);
 
+  const createNote = useCallback((folderId?: string) => {
+    return createNoteFromTemplate('blank', folderId);
+  }, [createNoteFromTemplate]);
+
   const updateNote = useCallback((id: string, updates: Partial<Note>) => {
     setNotes((prev) =>
-      prev.map((n) => (n.id === id ? { ...n, ...updates, updatedAt: Date.now() } : n))
+      prev.map((n) => {
+        if (n.id !== id) return n;
+
+        const updatedNote = { ...n, ...updates, updatedAt: Date.now() };
+
+        // Auto-Snapshotting on content change after 4s pause
+        if (updates.content !== undefined && updates.content !== n.content) {
+          if (autoSnapshotTimerRef.current[id]) {
+            clearTimeout(autoSnapshotTimerRef.current[id]);
+          }
+
+          autoSnapshotTimerRef.current[id] = setTimeout(() => {
+            setNotes((currentNotes) =>
+              currentNotes.map((cn) => {
+                if (cn.id === id && updates.content) {
+                  const snapshot: NoteRevision = {
+                    id: `auto-rev-${Date.now()}`,
+                    timestamp: Date.now(),
+                    title: cn.title,
+                    content: updates.content,
+                    charCount: updates.content.length,
+                  };
+                  const existing = cn.revisions || [];
+                  // Only snapshot if content is different from latest revision
+                  if (existing.length === 0 || existing[0].content !== updates.content) {
+                    return { ...cn, revisions: [snapshot, ...existing].slice(0, 25) };
+                  }
+                }
+                return cn;
+              })
+            );
+          }, 4000);
+        }
+
+        return updatedNote;
+      })
     );
   }, []);
+
+  const addAttachment = useCallback((id: string, file: AttachmentFile) => {
+    setNotes((prev) =>
+      prev.map((n) => {
+        if (n.id === id) {
+          const current = n.attachments || [];
+          return { ...n, attachments: [...current, file], updatedAt: Date.now() };
+        }
+        return n;
+      })
+    );
+    showToast(`Attached ${file.name}`, 'success');
+  }, [showToast]);
+
+  const removeAttachment = useCallback((id: string, attachmentId: string) => {
+    setNotes((prev) =>
+      prev.map((n) => {
+        if (n.id === id) {
+          const current = n.attachments || [];
+          return {
+            ...n,
+            attachments: current.filter((a) => a.id !== attachmentId),
+            updatedAt: Date.now(),
+          };
+        }
+        return n;
+      })
+    );
+    showToast('Removed attachment', 'info');
+  }, [showToast]);
 
   const togglePin = useCallback((id: string) => {
     setNotes((prev) =>
@@ -426,7 +502,10 @@ export function useNotes() {
     setToast,
     showToast,
     createNote,
+    createNoteFromTemplate,
     updateNote,
+    addAttachment,
+    removeAttachment,
     deleteNote,
     restoreNote,
     permanentDeleteNote,

@@ -4,6 +4,8 @@ export type FontChoice = 'sans' | 'serif' | 'mono' | 'dyslexic' | 'geist';
 
 export type ViewMode = 'edit' | 'split' | 'preview';
 
+export type TemplateType = 'blank' | 'todo' | 'meeting' | 'project' | 'study' | 'journal';
+
 export interface Folder {
   id: string;
   name: string;
@@ -25,6 +27,15 @@ export interface NoteRevision {
   charCount: number;
 }
 
+export interface AttachmentFile {
+  id: string;
+  name: string;
+  size: number;
+  type: string;
+  url: string;
+  createdAt: number;
+}
+
 export type FileExtension = 'txt' | 'md' | 'html' | 'json' | 'csv';
 
 export interface Note {
@@ -42,6 +53,8 @@ export interface Note {
   wordTargetGoal?: number;
   revisions?: NoteRevision[];
   fileType?: FileExtension;
+  attachments?: AttachmentFile[];
+  template?: TemplateType;
 }
 
 export interface NoteFilter {
@@ -64,6 +77,7 @@ export interface AppSettings {
   soundEnabled: boolean;
   soundVolume: number;
   activeSound: 'none' | 'rain' | 'whitenoise' | 'waves' | 'cafe';
+  editorWidth: 'compact' | 'comfortable' | 'full';
 }
 
 declare global {

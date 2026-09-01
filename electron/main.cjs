@@ -12,7 +12,9 @@ function createWindow() {
     minHeight: 600,
     frame: false, // Frameless for Windows 11 tabs & titlebar
     title: 'Notepad',
-    backgroundColor: '#0b0f19', // Default dark theme background to avoid white flash on load
+    transparent: true,
+    vibrancy: 'acrylic',
+    backgroundMaterial: 'acrylic',
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       nodeIntegration: false,

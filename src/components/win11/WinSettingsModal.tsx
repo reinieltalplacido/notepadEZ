@@ -24,7 +24,7 @@ export const WinSettingsModal: React.FC<WinSettingsModalProps> = ({
     { id: 'neon-matrix', name: 'Neon Matrix' },
     { id: 'sunset-glow', name: 'Sunset Glow' },
     { id: 'nordic-frost', name: 'Nordic Frost' },
-    { id: 'transparent', name: '✦ Transparent / Acrylic' },
+    { id: 'transparent', name: 'Transparent / Acrylic' },
   ];
 
   return createPortal(
@@ -75,7 +75,7 @@ export const WinSettingsModal: React.FC<WinSettingsModalProps> = ({
               { id: 'sans', name: 'Segoe UI' },
               { id: 'serif', name: 'Serif' },
               { id: 'dyslexic', name: 'Clean UI' },
-              { id: 'geist', name: '✦ Geist' },
+              { id: 'geist', name: 'Geist' },
             ].map((f) => (
               <button
                 key={f.id}
@@ -107,6 +107,32 @@ export const WinSettingsModal: React.FC<WinSettingsModalProps> = ({
             onChange={(e) => onUpdateSettings({ fontSize: parseInt(e.target.value) })}
             className="w-full accent-[var(--accent)] cursor-pointer"
           />
+        </div>
+
+        {/* Editor Width */}
+        <div className="space-y-2">
+          <label className="font-semibold text-[var(--text-secondary)] block uppercase tracking-wider text-[10px]">
+            Editor Width
+          </label>
+          <div className="grid grid-cols-3 gap-2">
+            {[
+              { id: 'compact', name: 'Compact' },
+              { id: 'comfortable', name: 'Comfortable' },
+              { id: 'full', name: 'Full Width' },
+            ].map((w) => (
+              <button
+                key={w.id}
+                onClick={() => onUpdateSettings({ editorWidth: w.id as any })}
+                className={`p-2 rounded-xl text-center border transition font-medium ${
+                  (settings.editorWidth || 'full') === w.id
+                    ? 'bg-[var(--accent)] text-white border-[var(--accent)]'
+                    : 'bg-[var(--bg-tertiary)] text-[var(--text-secondary)] border-[var(--border-color)]'
+                }`}
+              >
+                {w.name}
+              </button>
+            ))}
+          </div>
         </div>
 
         <div className="pt-2 border-t border-[var(--border-color)] flex justify-end">

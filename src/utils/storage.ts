@@ -28,6 +28,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   soundEnabled: false,
   soundVolume: 0.3,
   activeSound: 'none',
+  editorWidth: 'full',
 };
 
 export const SAMPLE_NOTES: Note[] = [

@@ -35,6 +35,7 @@ interface SidebarProps {
   onDeleteTag: (tagId: string) => void;
   collapsed: boolean;
   setCollapsed: (collapsed: boolean) => void;
+  onUpdateNoteFolder?: (noteId: string, folderId: string | undefined) => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -49,9 +50,37 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onDeleteTag,
   collapsed,
   setCollapsed,
+  onUpdateNoteFolder,
 }) => {
   const [isFoldersOpen, setIsFoldersOpen] = useState(true);
   const [isTagsOpen, setIsTagsOpen] = useState(true);
+  const [sidebarWidth, setSidebarWidth] = useState(220);
+  const isResizingRef = React.useRef(false);
+
+  const handleMouseDownResize = (e: React.MouseEvent) => {
+    e.preventDefault();
+    isResizingRef.current = true;
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      if (isResizingRef.current) {
+        const newWidth = Math.max(160, Math.min(380, moveEvent.clientX));
+        setSidebarWidth(newWidth);
+      }
+    };
+
+    const handleMouseUp = () => {
+      isResizingRef.current = false;
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+  };
+
+  const handleResetWidth = () => {
+    setSidebarWidth(220);
+  };
 
   const [showFolderModal, setShowFolderModal] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
@@ -103,10 +132,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   return (
     <aside
-      className={`h-[calc(100vh-4rem)] border-r border-[var(--border-color)] bg-[var(--bg-secondary)] flex flex-col justify-between transition-all duration-300 relative z-20 ${
-        collapsed ? 'w-16' : 'w-64'
-      }`}
+      style={{ width: collapsed ? '4rem' : `${sidebarWidth}px` }}
+      className="h-[calc(100vh-4rem)] border-r border-[var(--border-color)] bg-[var(--bg-secondary)] flex flex-col justify-between transition-[width] duration-150 relative z-20 shrink-0"
     >
+      {/* Resizable Divider Handle */}
+      {!collapsed && (
+        <div
+          onMouseDown={handleMouseDownResize}
+          onDoubleClick={handleResetWidth}
+          className="absolute top-0 right-0 w-1.5 h-full cursor-col-resize hover:bg-[var(--accent)]/50 transition-colors z-30 group"
+          title="Drag to resize sidebar width, double-click to reset"
+        >
+          <div className="w-full h-full group-hover:bg-[var(--accent)] opacity-40 transition" />
+        </div>
+      )}
       <div className="flex-1 overflow-y-auto py-4 px-3 space-y-6">
         {/* Navigation Section */}
         <div className="space-y-1">
@@ -277,11 +316,23 @@ export const Sidebar: React.FC<SidebarProps> = ({
                               folderId: isSelected ? null : folder.id,
                             }))
                           }
+                          onDragOver={(e) => {
+                            e.preventDefault();
+                            e.dataTransfer.dropEffect = 'move';
+                          }}
+                          onDrop={(e) => {
+                            e.preventDefault();
+                            const noteId = e.dataTransfer.getData('noteId');
+                            if (noteId && onUpdateNoteFolder) {
+                              onUpdateNoteFolder(noteId, folder.id);
+                            }
+                          }}
                           className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs transition-colors ${
                             isSelected
                               ? 'bg-[var(--accent)]/15 text-[var(--accent)] font-semibold border border-[var(--accent)]/30'
-                              : 'text-[var(--text-secondary)] hover:bg-white/5 hover:text-[var(--text-primary)]'
+                              : 'text-[var(--text-secondary)] hover:bg-white/5 hover:text-[var(--text-primary)] hover:border-[var(--accent)]/40'
                           }`}
+                          title="Click to filter or drag a note here to move it to this folder"
                         >
                           <div className="flex items-center gap-2 truncate">
                             {renderFolderIcon(folder.icon, folder.color)}
