@@ -37,6 +37,9 @@ import {
   File,
   Download,
   Trash2,
+  Edit3,
+  Eye,
+  Columns,
 } from 'lucide-react';
 
 interface EditorProps {
@@ -58,7 +61,7 @@ interface EditorProps {
 
 export const Editor: React.FC<EditorProps> = ({
   note,
-  viewMode,
+  viewMode = 'split',
   onViewModeChange,
   folders,
   tags,
@@ -74,6 +77,7 @@ export const Editor: React.FC<EditorProps> = ({
 }) => {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const previewRef = useRef<HTMLDivElement>(null);
 
   // Search & Replace state
   const [isFindOpen, setIsFindOpen] = useState(false);
@@ -81,99 +85,27 @@ export const Editor: React.FC<EditorProps> = ({
   const [matches, setMatches] = useState<number[]>([]);
   const [currentMatchIdx, setCurrentMatchIdx] = useState(0);
 
-  // Outline panel state
+  // Outline & History panel state
   const [isOutlineOpen, setIsOutlineOpen] = useState(false);
-
-  // Revision history modal state
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [isLinkModalOpen, setIsLinkModalOpen] = useState(false);
 
-  // Undo / Redo custom history stacks
+  // Custom Undo / Redo history stacks
   const [undoStack, setUndoStack] = useState<string[]>([]);
   const [redoStack, setRedoStack] = useState<string[]>([]);
   const lastContentRef = useRef<string>('');
+  const currentNoteIdRef = useRef<string | null>(null);
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const previewRef = useRef<HTMLDivElement>(null);
-  const isTypingPreviewRef = useRef<boolean>(false);
-
-  // Sync content history on note selection change
+  // Reset history stack when switching active note
   useEffect(() => {
     if (note) {
+      currentNoteIdRef.current = note.id;
       lastContentRef.current = note.content;
       setUndoStack([]);
       setRedoStack([]);
     }
   }, [note?.id]);
-
-  // Sync rendered preview HTML when note content changes
-  useEffect(() => {
-    if (previewRef.current) {
-      if (!isTypingPreviewRef.current) {
-        previewRef.current.innerHTML = renderMarkdown(note ? note.content : '');
-      }
-    }
-  }, [note?.content, note?.id]);
-
-  const handlePreviewInput = () => {
-    if (!previewRef.current || !note) return;
-    isTypingPreviewRef.current = true;
-    const text = previewRef.current.innerText || '';
-    handleContentChange(text);
-    setTimeout(() => {
-      isTypingPreviewRef.current = false;
-    }, 150);
-  };
-
-  const handlePaste = (e: React.ClipboardEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    const plainText = e.clipboardData.getData('text/plain');
-    const htmlText = e.clipboardData.getData('text/html');
-
-    let htmlToInsert = '';
-    if (
-      plainText &&
-      (plainText.includes('#') ||
-        plainText.includes('*') ||
-        plainText.includes('`') ||
-        plainText.includes('---') ||
-        plainText.includes('>'))
-    ) {
-      htmlToInsert = renderMarkdown(plainText);
-    } else if (htmlText) {
-      htmlToInsert = htmlText;
-    } else if (plainText) {
-      htmlToInsert = renderMarkdown(plainText);
-    }
-
-    if (htmlToInsert) {
-      document.execCommand('insertHTML', false, htmlToInsert);
-      if (previewRef.current && note) {
-        handleContentChange(previewRef.current.innerText || plainText);
-      }
-    }
-  };
-
-  const handleCanvasClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    const target = e.target as HTMLElement;
-    const linkAnchor = target.closest('a');
-    if (linkAnchor) {
-      const url = linkAnchor.getAttribute('href') || (linkAnchor as HTMLAnchorElement).href;
-      if (url && url !== '#') {
-        e.preventDefault();
-        e.stopPropagation();
-        window.open(url, '_blank', 'noopener,noreferrer');
-      }
-    }
-  };
-
-  const execRichFormat = (command: string, value: string = '') => {
-    if (previewRef.current) {
-      previewRef.current.focus();
-      document.execCommand(command, false, value);
-      handlePreviewInput();
-    }
-  };
 
   // Push state to undo stack
   const pushToUndo = useCallback((content: string) => {
@@ -185,7 +117,6 @@ export const Editor: React.FC<EditorProps> = ({
   const handleContentChange = (newContent: string) => {
     if (!note) return;
 
-    // Debounce pushing typing changes to undo stack so fast typing stays in one undo step
     if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
     debounceTimerRef.current = setTimeout(() => {
       pushToUndo(newContent);
@@ -213,7 +144,7 @@ export const Editor: React.FC<EditorProps> = ({
   }, [note, redoStack, onUpdateNote]);
 
   // Insert formatting helper with smart toggle (wrap / unwrap)
-  const insertFormatting = (prefix: string, suffix: string = prefix, defaultText: string = '') => {
+  const insertFormatting = useCallback((prefix: string, suffix: string = prefix, defaultText: string = '') => {
     const textarea = textareaRef.current;
     if (!note || !textarea) return;
 
@@ -234,39 +165,27 @@ export const Editor: React.FC<EditorProps> = ({
       setTimeout(() => {
         textarea.focus();
         textarea.setSelectionRange(newStart, newEnd);
-      }, 50);
+      }, 30);
       return;
     }
 
-    // Check Case 1: Highlighted text itself starts with prefix and ends with suffix
     const hasInternalFormatting =
       prefix &&
       suffix &&
       selectedText.length >= prefix.length + suffix.length &&
       selectedText.startsWith(prefix) &&
-      selectedText.endsWith(suffix) &&
-      !(prefix === '*' && selectedText.startsWith('**')) &&
-      !(suffix === '*' && selectedText.endsWith('**'));
+      selectedText.endsWith(suffix);
 
-    // Check Case 2: Content before start & after end has prefix and suffix
     const beforeText = note.content.substring(Math.max(0, start - prefix.length), start);
     const afterText = note.content.substring(end, Math.min(note.content.length, end + suffix.length));
-    const hasExternalFormatting =
-      prefix &&
-      suffix &&
-      beforeText === prefix &&
-      afterText === suffix &&
-      !(prefix === '*' && note.content.substring(Math.max(0, start - 2), start) === '**') &&
-      !(suffix === '*' && note.content.substring(end, Math.min(note.content.length, end + 2)) === '**');
+    const hasExternalFormatting = prefix && suffix && beforeText === prefix && afterText === suffix;
 
     if (hasInternalFormatting) {
-      // Toggle OFF: Remove internal formatting
       const unwrapped = selectedText.substring(prefix.length, selectedText.length - suffix.length);
       newContent = note.content.substring(0, start) + unwrapped + note.content.substring(end);
       newStart = start;
       newEnd = start + unwrapped.length;
     } else if (hasExternalFormatting) {
-      // Toggle OFF: Remove external formatting
       newContent =
         note.content.substring(0, start - prefix.length) +
         selectedText +
@@ -274,7 +193,6 @@ export const Editor: React.FC<EditorProps> = ({
       newStart = start - prefix.length;
       newEnd = newStart + selectedText.length;
     } else {
-      // Toggle ON: Add formatting
       newContent =
         note.content.substring(0, start) +
         prefix +
@@ -291,10 +209,10 @@ export const Editor: React.FC<EditorProps> = ({
     setTimeout(() => {
       textarea.focus();
       textarea.setSelectionRange(newStart, newEnd);
-    }, 50);
-  };
+    }, 30);
+  }, [note, pushToUndo, onUpdateNote]);
 
-  const insertLinePrefix = (prefix: string) => {
+  const insertLinePrefix = useCallback((prefix: string) => {
     const textarea = textareaRef.current;
     if (!note || !textarea) return;
 
@@ -308,11 +226,9 @@ export const Editor: React.FC<EditorProps> = ({
     let newContent = '';
 
     if (currentLine.startsWith(prefix)) {
-      // Toggle OFF: Remove prefix from line
       const updatedLine = currentLine.substring(prefix.length);
       newContent = note.content.substring(0, lineStart) + updatedLine + note.content.substring(actualEnd);
     } else {
-      // Toggle ON: Add prefix to line (stripping any conflicting prefix if necessary)
       const cleanedLine = currentLine.replace(/^(#{1,6}\s+|-\s*\[[ xX]\]\s*|[-*+]\s*|\d+\.\s*>*\s*)/, '');
       newContent = note.content.substring(0, lineStart) + `${prefix}${cleanedLine}` + note.content.substring(actualEnd);
     }
@@ -323,8 +239,18 @@ export const Editor: React.FC<EditorProps> = ({
     setTimeout(() => {
       textarea.focus();
       textarea.setSelectionRange(lineStart, lineStart + (newContent.length - note.content.length + currentLine.length));
-    }, 50);
-  };
+    }, 30);
+  }, [note, pushToUndo, onUpdateNote]);
+
+  const insertTimestamp = useCallback(() => {
+    const nowStr = `\n> 🕒 *${new Date().toLocaleString()}*\n`;
+    insertFormatting(nowStr, '');
+  }, [insertFormatting]);
+
+  const insertTableTemplate = useCallback(() => {
+    const tableTemplate = `\n| Item | Description | Status |\n| :--- | :--- | :---: |\n| Task 1 | Feature implementation | 🚀 |\n| Task 2 | UI Polishing | 🎨 |\n`;
+    insertFormatting(tableTemplate, '');
+  }, [insertFormatting]);
 
   // Keyboard Event Handler for Editor (Auto-brackets, Tab indent, Enter list continuation, Ctrl+Z / Ctrl+Y)
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -372,7 +298,6 @@ export const Editor: React.FC<EditorProps> = ({
       let diff = 0;
 
       if (e.shiftKey) {
-        // Unindent
         newLines = selectedLines.map((line) => {
           if (line.startsWith('  ')) {
             diff -= 2;
@@ -384,7 +309,6 @@ export const Editor: React.FC<EditorProps> = ({
           return line;
         });
       } else {
-        // Indent 2 spaces
         newLines = selectedLines.map((line) => {
           diff += 2;
           return '  ' + line;
@@ -409,22 +333,19 @@ export const Editor: React.FC<EditorProps> = ({
       return;
     }
 
-    // Smart Enter List Continuation & Indentation
+    // Smart Enter List Continuation
     if (e.key === 'Enter') {
       const lineStart = content.lastIndexOf('\n', selectionStart - 1) + 1;
       const currentLine = content.substring(lineStart, selectionStart);
 
-      // Check leading indentation
       const indentMatch = currentLine.match(/^(\s*)/);
       const indent = indentMatch ? indentMatch[1] : '';
 
-      // Check list patterns
       const checkboxMatch = currentLine.match(/^(\s*-\s*\[[ xX]\]\s*)/);
       const bulletMatch = currentLine.match(/^(\s*[-*+]\s*)/);
       const numberMatch = currentLine.match(/^(\s*(\d+)\.\s*)/);
 
       if (checkboxMatch) {
-        // If line is empty checkbox `- [ ] `, clear it on enter
         if (currentLine.trim() === '- [ ]' || currentLine.trim() === '- [x]') {
           e.preventDefault();
           const newContent = content.substring(0, lineStart) + content.substring(selectionStart);
@@ -484,14 +405,12 @@ export const Editor: React.FC<EditorProps> = ({
       '"': '"',
       "'": "'",
       '`': '`',
-      '*': '*',
     };
 
     if (pairs[e.key]) {
       const closing = pairs[e.key];
 
-      // Overtyping closing pair if typed right before it
-      if (!isSelected && content.charAt(selectionStart) === e.key && (e.key === '"' || e.key === "'" || e.key === '`' || e.key === '*')) {
+      if (!isSelected && content.charAt(selectionStart) === e.key && (e.key === '"' || e.key === "'" || e.key === '`')) {
         e.preventDefault();
         setTimeout(() => textarea.setSelectionRange(selectionStart + 1, selectionStart + 1), 10);
         return;
@@ -531,8 +450,7 @@ export const Editor: React.FC<EditorProps> = ({
         (charBefore === '{' && charAfter === '}') ||
         (charBefore === '"' && charAfter === '"') ||
         (charBefore === "'" && charAfter === "'") ||
-        (charBefore === '`' && charAfter === '`') ||
-        (charBefore === '*' && charAfter === '*');
+        (charBefore === '`' && charAfter === '`');
 
       if (isPair) {
         e.preventDefault();
@@ -597,7 +515,6 @@ export const Editor: React.FC<EditorProps> = ({
 
   const handleReplaceAll = useCallback((replaceText: string) => {
     if (!note || matches.length === 0) return;
-    // Replace all using regex match
     const textarea = textareaRef.current;
     const query = note.content.substring(
       textarea?.selectionStart || 0,
@@ -615,12 +532,25 @@ export const Editor: React.FC<EditorProps> = ({
     const lines = note.content.split('\n');
     let charOffset = 0;
     for (let i = 0; i < line - 1 && i < lines.length; i++) {
-      charOffset += lines[i].length + 1; // +1 for newline
+      charOffset += lines[i].length + 1;
     }
 
     textareaRef.current.focus();
     textareaRef.current.setSelectionRange(charOffset, charOffset + (lines[line - 1]?.length || 0));
   }, [note]);
+
+  const handleCanvasClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    const target = e.target as HTMLElement;
+    const linkAnchor = target.closest('a');
+    if (linkAnchor) {
+      const url = linkAnchor.getAttribute('href') || (linkAnchor as HTMLAnchorElement).href;
+      if (url && url !== '#') {
+        e.preventDefault();
+        e.stopPropagation();
+        window.open(url, '_blank', 'noopener,noreferrer');
+      }
+    }
+  };
 
   if (!note) {
     return (
@@ -636,22 +566,14 @@ export const Editor: React.FC<EditorProps> = ({
     );
   }
 
-  const insertTimestamp = () => {
-    const nowStr = `\n> 🕒 *${new Date().toLocaleString()}*\n`;
-    insertFormatting(nowStr);
-  };
-
-  const insertTableTemplate = () => {
-    const tableTemplate = `\n| Item | Description | Status |\n| :--- | :--- | :---: |\n| Task 1 | Feature implementation | 🚀 |\n| Task 2 | UI Polishing | 🎨 |\n`;
-    insertFormatting(tableTemplate);
-  };
-
   const fontClassMap: Record<string, string> = {
     sans: 'font-sans',
     serif: 'font-serif',
     mono: 'font-mono',
     dyslexic: 'font-dyslexic',
   };
+
+  const renderedHtml = renderMarkdown(note.content);
 
   return (
     <div className={`flex-1 ${isFullScreen ? 'h-screen w-screen border-none rounded-none z-50' : 'h-[calc(100vh-4rem)]'} flex flex-col bg-[var(--bg-primary)] overflow-hidden relative`}>
@@ -672,283 +594,324 @@ export const Editor: React.FC<EditorProps> = ({
       {/* Title & Meta Options Header (Hidden in Full Screen) */}
       {!isFullScreen && (
         <div className="p-4 pb-2 border-b border-[var(--border-color)] bg-[var(--bg-secondary)] space-y-3">
-        <input
-          type="text"
-          value={note.title}
-          onChange={(e) => onUpdateNote(note.id, { title: e.target.value })}
-          placeholder="Untitled Note"
-          className="w-full text-xl sm:text-2xl font-bold bg-transparent text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none tracking-tight pb-1 border-b border-transparent focus:border-[var(--accent)] transition-all duration-200"
-        />
+          <input
+            type="text"
+            value={note.title}
+            onChange={(e) => onUpdateNote(note.id, { title: e.target.value })}
+            placeholder="Untitled Note"
+            className="w-full text-xl sm:text-2xl font-bold bg-transparent text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none tracking-tight pb-1 border-b border-transparent focus:border-[var(--accent)] transition-all duration-200"
+          />
 
-        {/* Folder & Tags Bar */}
-        <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-[var(--text-secondary)]">
-          <div className="flex flex-wrap items-center gap-3">
-            {/* Folder Selector */}
-            <div className="flex items-center gap-1.5 bg-[var(--bg-tertiary)] px-2.5 py-1 rounded-lg border border-[var(--border-color)]">
-              <FolderIcon className="w-3.5 h-3.5 text-[var(--accent)]" />
-              <select
-                value={note.folderId || ''}
-                onChange={(e) => onUpdateNote(note.id, { folderId: e.target.value || undefined })}
-                className="bg-transparent outline-none cursor-pointer font-medium text-[var(--text-primary)]"
+          {/* Folder, Tags & View Mode Switcher */}
+          <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-[var(--text-secondary)]">
+            <div className="flex flex-wrap items-center gap-3">
+              {/* Folder Selector */}
+              <div className="flex items-center gap-1.5 bg-[var(--bg-tertiary)] px-2.5 py-1 rounded-lg border border-[var(--border-color)]">
+                <FolderIcon className="w-3.5 h-3.5 text-[var(--accent)]" />
+                <select
+                  value={note.folderId || ''}
+                  onChange={(e) => onUpdateNote(note.id, { folderId: e.target.value || undefined })}
+                  className="bg-transparent outline-none cursor-pointer font-medium text-[var(--text-primary)]"
+                >
+                  <option value="" className="bg-[var(--bg-secondary)]">No Folder</option>
+                  {folders.map((f) => (
+                    <option key={f.id} value={f.id} className="bg-[var(--bg-secondary)]">
+                      {f.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Tags Selector */}
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <TagIcon className="w-3.5 h-3.5 text-purple-400" />
+                {tags.map((tag) => {
+                  const isSelected = note.tags.includes(tag.id);
+                  return (
+                    <button
+                      key={tag.id}
+                      onClick={() => {
+                        const newTags = isSelected
+                          ? note.tags.filter((t) => t !== tag.id)
+                          : [...note.tags, tag.id];
+                        onUpdateNote(note.id, { tags: newTags });
+                      }}
+                      className={`px-2 py-0.5 rounded-md text-[11px] font-medium transition border ${
+                        isSelected
+                          ? 'bg-[var(--accent)] text-white border-[var(--accent)] shadow-sm'
+                          : 'bg-[var(--bg-tertiary)] text-[var(--text-muted)] border-[var(--border-color)] hover:text-[var(--text-primary)]'
+                      }`}
+                    >
+                      #{tag.name}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* View Mode & Quick Utilities */}
+            <div className="flex items-center gap-2">
+              {/* View Mode Segmented Control */}
+              <div className="flex items-center p-0.5 rounded-lg bg-[var(--bg-tertiary)] border border-[var(--border-color)]">
+                <button
+                  onClick={() => onViewModeChange && onViewModeChange('edit')}
+                  className={`flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium transition ${
+                    viewMode === 'edit'
+                      ? 'bg-[var(--accent)] text-white shadow-sm'
+                      : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+                  }`}
+                  title="Edit Mode (Markdown Editor)"
+                >
+                  <Edit3 className="w-3 h-3" />
+                  <span>Edit</span>
+                </button>
+                <button
+                  onClick={() => onViewModeChange && onViewModeChange('split')}
+                  className={`flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium transition ${
+                    viewMode === 'split'
+                      ? 'bg-[var(--accent)] text-white shadow-sm'
+                      : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+                  }`}
+                  title="Split Mode (Editor + Preview Side-by-Side)"
+                >
+                  <Columns className="w-3 h-3" />
+                  <span>Split</span>
+                </button>
+                <button
+                  onClick={() => onViewModeChange && onViewModeChange('preview')}
+                  className={`flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium transition ${
+                    viewMode === 'preview'
+                      ? 'bg-[var(--accent)] text-white shadow-sm'
+                      : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+                  }`}
+                  title="Preview Mode (Rendered View)"
+                >
+                  <Eye className="w-3 h-3" />
+                  <span>Preview</span>
+                </button>
+              </div>
+
+              <div className="w-px h-4 bg-[var(--border-color)]" />
+
+              {/* Utility Actions */}
+              <button
+                onClick={onToggleFullScreen}
+                className={`p-1.5 rounded-lg border transition ${
+                  isFullScreen
+                    ? 'bg-[var(--accent)] text-white border-[var(--accent)] shadow-sm'
+                    : 'bg-[var(--bg-tertiary)] text-[var(--text-secondary)] border-[var(--border-color)] hover:text-[var(--text-primary)] hover:border-[var(--accent)]'
+                }`}
+                title={isFullScreen ? 'Exit Full Screen Editor (F11 / Esc)' : 'Full Screen Editor (F11)'}
               >
-                <option value="" className="bg-[var(--bg-secondary)]">No Folder</option>
-                {folders.map((f) => (
-                  <option key={f.id} value={f.id} className="bg-[var(--bg-secondary)]">
-                    {f.name}
-                  </option>
-                ))}
-              </select>
+                {isFullScreen ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
+              </button>
+
+              <button
+                onClick={() => {
+                  setIsFindOpen(!isFindOpen);
+                  setIsReplaceMode(false);
+                }}
+                className={`p-1.5 rounded-lg border transition ${
+                  isFindOpen
+                    ? 'bg-[var(--accent)] text-white border-[var(--accent)]'
+                    : 'bg-[var(--bg-tertiary)] text-[var(--text-secondary)] border-[var(--border-color)] hover:text-[var(--text-primary)]'
+                }`}
+                title="Find & Replace (Ctrl+F)"
+              >
+                <Search className="w-3.5 h-3.5" />
+              </button>
+
+              <button
+                onClick={() => setIsOutlineOpen(!isOutlineOpen)}
+                className={`p-1.5 rounded-lg border transition ${
+                  isOutlineOpen
+                    ? 'bg-[var(--accent)] text-white border-[var(--accent)]'
+                    : 'bg-[var(--bg-tertiary)] text-[var(--text-secondary)] border-[var(--border-color)] hover:text-[var(--text-primary)]'
+                }`}
+                title="Toggle Table of Contents Outline"
+              >
+                <ListTree className="w-3.5 h-3.5" />
+              </button>
+
+              <button
+                onClick={() => setIsHistoryOpen(true)}
+                className="p-1.5 rounded-lg bg-[var(--bg-tertiary)] text-[var(--text-secondary)] border border-[var(--border-color)] hover:text-[var(--text-primary)] hover:border-[var(--accent)] transition"
+                title="Revision History & Snapshots"
+              >
+                <History className="w-3.5 h-3.5" />
+              </button>
             </div>
-
-            {/* Tags Selector */}
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <TagIcon className="w-3.5 h-3.5 text-purple-400" />
-              {tags.map((tag) => {
-                const isSelected = note.tags.includes(tag.id);
-                return (
-                  <button
-                    key={tag.id}
-                    onClick={() => {
-                      const newTags = isSelected
-                        ? note.tags.filter((t) => t !== tag.id)
-                        : [...note.tags, tag.id];
-                      onUpdateNote(note.id, { tags: newTags });
-                    }}
-                    className={`px-2 py-0.5 rounded-md text-[11px] font-medium transition border ${
-                      isSelected
-                        ? 'bg-[var(--accent)] text-white border-[var(--accent)] shadow-sm'
-                        : 'bg-[var(--bg-tertiary)] text-[var(--text-muted)] border-[var(--border-color)] hover:text-[var(--text-primary)]'
-                    }`}
-                  >
-                    #{tag.name}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Quick Utility Actions (Find, Outline, Snapshots, Full Screen) */}
-          <div className="flex items-center gap-1.5">
-            <button
-              onClick={onToggleFullScreen}
-              className={`p-1.5 rounded-lg border transition ${
-                isFullScreen
-                  ? 'bg-[var(--accent)] text-white border-[var(--accent)] shadow-sm'
-                  : 'bg-[var(--bg-tertiary)] text-[var(--text-secondary)] border-[var(--border-color)] hover:text-[var(--text-primary)] hover:border-[var(--accent)]'
-              }`}
-              title={isFullScreen ? 'Exit Full Screen Editor (F11 / Esc)' : 'Full Screen Editor (F11)'}
-            >
-              {isFullScreen ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
-            </button>
-
-            <div className="w-px h-4 bg-[var(--border-color)]" />
-
-            <button
-              onClick={() => {
-                setIsFindOpen(!isFindOpen);
-                setIsReplaceMode(false);
-              }}
-              className={`p-1.5 rounded-lg border transition ${
-                isFindOpen
-                  ? 'bg-[var(--accent)] text-white border-[var(--accent)]'
-                  : 'bg-[var(--bg-tertiary)] text-[var(--text-secondary)] border-[var(--border-color)] hover:text-[var(--text-primary)]'
-              }`}
-              title="Find & Replace (Ctrl+F)"
-            >
-              <Search className="w-3.5 h-3.5" />
-            </button>
-
-            <button
-              onClick={() => setIsOutlineOpen(!isOutlineOpen)}
-              className={`p-1.5 rounded-lg border transition ${
-                isOutlineOpen
-                  ? 'bg-[var(--accent)] text-white border-[var(--accent)]'
-                  : 'bg-[var(--bg-tertiary)] text-[var(--text-secondary)] border-[var(--border-color)] hover:text-[var(--text-primary)]'
-              }`}
-              title="Toggle Table of Contents Outline"
-            >
-              <ListTree className="w-3.5 h-3.5" />
-            </button>
-
-            <button
-              onClick={() => setIsHistoryOpen(true)}
-              className="p-1.5 rounded-lg bg-[var(--bg-tertiary)] text-[var(--text-secondary)] border border-[var(--border-color)] hover:text-[var(--text-primary)] hover:border-[var(--accent)] transition"
-              title="Revision History & Snapshots"
-            >
-              <History className="w-3.5 h-3.5" />
-            </button>
           </div>
         </div>
-      </div>
       )}
 
       {/* Formatting Toolbar with Undo / Redo (Hidden in Full Screen) */}
       {!isFullScreen && (
         <div className="px-3 py-1.5 border-b border-[var(--border-color)] bg-[var(--bg-secondary)] flex items-center gap-1 overflow-x-auto select-none shrink-0">
-        {/* Undo / Redo */}
-        <button
-          onClick={handleUndo}
-          disabled={undoStack.length === 0}
-          className="p-1.5 rounded-lg hover:bg-white/10 text-[var(--text-secondary)] hover:text-[var(--text-primary)] disabled:opacity-30 transition"
-          title="Undo (Ctrl+Z)"
-        >
-          <Undo className="w-3.5 h-3.5" />
-        </button>
-        <button
-          onClick={handleRedo}
-          disabled={redoStack.length === 0}
-          className="p-1.5 rounded-lg hover:bg-white/10 text-[var(--text-secondary)] hover:text-[var(--text-primary)] disabled:opacity-30 transition"
-          title="Redo (Ctrl+Y)"
-        >
-          <Redo className="w-3.5 h-3.5" />
-        </button>
-        <div className="w-px h-4 bg-[var(--border-color)] mx-1" />
+          {/* Undo / Redo */}
+          <button
+            onClick={handleUndo}
+            disabled={undoStack.length === 0}
+            className="p-1.5 rounded-lg hover:bg-white/10 text-[var(--text-secondary)] hover:text-[var(--text-primary)] disabled:opacity-30 transition"
+            title="Undo (Ctrl+Z)"
+          >
+            <Undo className="w-3.5 h-3.5" />
+          </button>
+          <button
+            onClick={handleRedo}
+            disabled={redoStack.length === 0}
+            className="p-1.5 rounded-lg hover:bg-white/10 text-[var(--text-secondary)] hover:text-[var(--text-primary)] disabled:opacity-30 transition"
+            title="Redo (Ctrl+Y)"
+          >
+            <Redo className="w-3.5 h-3.5" />
+          </button>
+          <div className="w-px h-4 bg-[var(--border-color)] mx-1" />
 
-        <button
-          onClick={() => execRichFormat('bold')}
-          className="p-1.5 rounded-lg hover:bg-white/10 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition"
-          title="Bold (B)"
-        >
-          <Bold className="w-3.5 h-3.5" />
-        </button>
-        <button
-          onClick={() => execRichFormat('italic')}
-          className="p-1.5 rounded-lg hover:bg-white/10 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition"
-          title="Italic (I)"
-        >
-          <Italic className="w-3.5 h-3.5" />
-        </button>
-        <button
-          onClick={() => execRichFormat('strikeThrough')}
-          className="p-1.5 rounded-lg hover:bg-white/10 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition"
-          title="Strikethrough (S)"
-        >
-          <Strikethrough className="w-3.5 h-3.5" />
-        </button>
-        <div className="w-px h-4 bg-[var(--border-color)] mx-1" />
+          <button
+            onClick={() => insertFormatting('**', '**', 'bold text')}
+            className="p-1.5 rounded-lg hover:bg-white/10 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition"
+            title="Bold (**text**)"
+          >
+            <Bold className="w-3.5 h-3.5" />
+          </button>
+          <button
+            onClick={() => insertFormatting('*', '*', 'italic text')}
+            className="p-1.5 rounded-lg hover:bg-white/10 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition"
+            title="Italic (*text*)"
+          >
+            <Italic className="w-3.5 h-3.5" />
+          </button>
+          <button
+            onClick={() => insertFormatting('~~', '~~', 'strikethrough')}
+            className="p-1.5 rounded-lg hover:bg-white/10 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition"
+            title="Strikethrough (~~text~~)"
+          >
+            <Strikethrough className="w-3.5 h-3.5" />
+          </button>
+          <div className="w-px h-4 bg-[var(--border-color)] mx-1" />
 
-        <button
-          onClick={() => execRichFormat('formatBlock', '<h1>')}
-          className="p-1.5 rounded-lg hover:bg-white/10 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition"
-          title="Heading 1 (H1)"
-        >
-          <Heading1 className="w-3.5 h-3.5" />
-        </button>
-        <button
-          onClick={() => execRichFormat('formatBlock', '<h2>')}
-          className="p-1.5 rounded-lg hover:bg-white/10 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition"
-          title="Heading 2 (H2)"
-        >
-          <Heading2 className="w-3.5 h-3.5" />
-        </button>
-        <button
-          onClick={() => execRichFormat('formatBlock', '<h3>')}
-          className="p-1.5 rounded-lg hover:bg-white/10 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition"
-          title="Heading 3 (H3)"
-        >
-          <Heading3 className="w-3.5 h-3.5" />
-        </button>
-        <div className="w-px h-4 bg-[var(--border-color)] mx-1" />
+          <button
+            onClick={() => insertLinePrefix('# ')}
+            className="p-1.5 rounded-lg hover:bg-white/10 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition"
+            title="Heading 1 (#)"
+          >
+            <Heading1 className="w-3.5 h-3.5" />
+          </button>
+          <button
+            onClick={() => insertLinePrefix('## ')}
+            className="p-1.5 rounded-lg hover:bg-white/10 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition"
+            title="Heading 2 (##)"
+          >
+            <Heading2 className="w-3.5 h-3.5" />
+          </button>
+          <button
+            onClick={() => insertLinePrefix('### ')}
+            className="p-1.5 rounded-lg hover:bg-white/10 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition"
+            title="Heading 3 (###)"
+          >
+            <Heading3 className="w-3.5 h-3.5" />
+          </button>
+          <div className="w-px h-4 bg-[var(--border-color)] mx-1" />
 
-        <button
-          onClick={() => execRichFormat('insertHTML', '<input type="checkbox" style="margin-right:6px;" />&nbsp;')}
-          className="p-1.5 rounded-lg hover:bg-white/10 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition"
-          title="Checklist item"
-        >
-          <CheckSquare className="w-3.5 h-3.5 text-emerald-400" />
-        </button>
-        <button
-          onClick={() => execRichFormat('insertUnorderedList')}
-          className="p-1.5 rounded-lg hover:bg-white/10 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition"
-          title="Bullet list"
-        >
-          <List className="w-3.5 h-3.5" />
-        </button>
-        <button
-          onClick={() => execRichFormat('insertOrderedList')}
-          className="p-1.5 rounded-lg hover:bg-white/10 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition"
-          title="Numbered list"
-        >
-          <ListOrdered className="w-3.5 h-3.5" />
-        </button>
-        <div className="w-px h-4 bg-[var(--border-color)] mx-1" />
+          <button
+            onClick={() => insertLinePrefix('- [ ] ')}
+            className="p-1.5 rounded-lg hover:bg-white/10 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition"
+            title="Checklist item (- [ ])"
+          >
+            <CheckSquare className="w-3.5 h-3.5 text-emerald-400" />
+          </button>
+          <button
+            onClick={() => insertLinePrefix('- ')}
+            className="p-1.5 rounded-lg hover:bg-white/10 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition"
+            title="Bullet list (-)"
+          >
+            <List className="w-3.5 h-3.5" />
+          </button>
+          <button
+            onClick={() => insertLinePrefix('1. ')}
+            className="p-1.5 rounded-lg hover:bg-white/10 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition"
+            title="Numbered list (1.)"
+          >
+            <ListOrdered className="w-3.5 h-3.5" />
+          </button>
+          <div className="w-px h-4 bg-[var(--border-color)] mx-1" />
 
-        <button
-          onClick={() => execRichFormat('insertHTML', '<pre style="background:rgba(0,0,0,0.2);padding:10px;border-radius:8px;font-family:monospace;margin:8px 0;"><code>// Write code here...</code></pre><p><br></p>')}
-          className="p-1.5 rounded-lg hover:bg-white/10 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition"
-          title="Code block"
-        >
-          <Code className="w-3.5 h-3.5 text-indigo-400" />
-        </button>
-        <button
-          onClick={() => execRichFormat('formatBlock', '<blockquote>')}
-          className="p-1.5 rounded-lg hover:bg-white/10 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition"
-          title="Blockquote"
-        >
-          <Quote className="w-3.5 h-3.5" />
-        </button>
-        <button
-          onClick={() => execRichFormat('insertHTML', '<table border="1" style="border-collapse:collapse;width:100%;margin:10px 0;"><thead><tr><th style="padding:6px;border:1px solid currentColor;">Col 1</th><th style="padding:6px;border:1px solid currentColor;">Col 2</th></tr></thead><tbody><tr><td style="padding:6px;border:1px solid currentColor;">Data 1</td><td style="padding:6px;border:1px solid currentColor;">Data 2</td></tr></tbody></table><p><br></p>')}
-          className="p-1.5 rounded-lg hover:bg-white/10 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition"
-          title="Insert table grid"
-        >
-          <Table className="w-3.5 h-3.5 text-amber-400" />
-        </button>
-        <button
-          onClick={() => execRichFormat('insertHorizontalRule')}
-          className="p-1.5 rounded-lg hover:bg-white/10 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition"
-          title="Divider line"
-        >
-          <Minus className="w-3.5 h-3.5" />
-        </button>
-        <button
-          onClick={() => setIsLinkModalOpen(true)}
-          className="p-1.5 rounded-lg hover:bg-white/10 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition"
-          title="Insert web link"
-        >
-          <Link className="w-3.5 h-3.5" />
-        </button>
-        <button
-          onClick={() => fileInputRef.current?.click()}
-          className="p-1.5 rounded-lg hover:bg-white/10 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition"
-          title="Attach File (Images, PDFs, Code, Screenshots)"
-        >
-          <Paperclip className="w-3.5 h-3.5 text-[var(--accent)]" />
-        </button>
-        <input
-          type="file"
-          ref={fileInputRef}
-          onChange={(e) => {
-            const files = e.target.files;
-            if (!files || files.length === 0 || !note || !onAddAttachment) return;
-            const file = files[0];
-            const reader = new FileReader();
-            reader.onload = (event) => {
-              const url = event.target?.result as string;
-              const attachment: AttachmentFile = {
-                id: `att-${Date.now()}`,
-                name: file.name,
-                size: file.size,
-                type: file.type || 'application/octet-stream',
-                url: url,
-                createdAt: Date.now(),
+          <button
+            onClick={() => insertFormatting('\n```ts\n', '\n```\n', '// Write code here')}
+            className="p-1.5 rounded-lg hover:bg-white/10 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition"
+            title="Code block (```)"
+          >
+            <Code className="w-3.5 h-3.5 text-indigo-400" />
+          </button>
+          <button
+            onClick={() => insertLinePrefix('> ')}
+            className="p-1.5 rounded-lg hover:bg-white/10 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition"
+            title="Blockquote (>)"
+          >
+            <Quote className="w-3.5 h-3.5" />
+          </button>
+          <button
+            onClick={insertTableTemplate}
+            className="p-1.5 rounded-lg hover:bg-white/10 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition"
+            title="Insert Markdown Table Grid"
+          >
+            <Table className="w-3.5 h-3.5 text-amber-400" />
+          </button>
+          <button
+            onClick={() => insertFormatting('\n---\n', '')}
+            className="p-1.5 rounded-lg hover:bg-white/10 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition"
+            title="Divider line (---)"
+          >
+            <Minus className="w-3.5 h-3.5" />
+          </button>
+          <button
+            onClick={() => setIsLinkModalOpen(true)}
+            className="p-1.5 rounded-lg hover:bg-white/10 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition"
+            title="Insert web link"
+          >
+            <Link className="w-3.5 h-3.5" />
+          </button>
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            className="p-1.5 rounded-lg hover:bg-white/10 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition"
+            title="Attach File (Images, PDFs, Code, Screenshots)"
+          >
+            <Paperclip className="w-3.5 h-3.5 text-[var(--accent)]" />
+          </button>
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={(e) => {
+              const files = e.target.files;
+              if (!files || files.length === 0 || !note || !onAddAttachment) return;
+              const file = files[0];
+              const reader = new FileReader();
+              reader.onload = (event) => {
+                const url = event.target?.result as string;
+                const attachment: AttachmentFile = {
+                  id: `att-${Date.now()}`,
+                  name: file.name,
+                  size: file.size,
+                  type: file.type || 'application/octet-stream',
+                  url: url,
+                  createdAt: Date.now(),
+                };
+                onAddAttachment(note.id, attachment);
               };
-              onAddAttachment(note.id, attachment);
-            };
-            reader.readAsDataURL(file);
-            e.target.value = '';
-          }}
-          className="hidden"
-        />
+              reader.readAsDataURL(file);
+              e.target.value = '';
+            }}
+            className="hidden"
+          />
 
-        <button
-          onClick={() => execRichFormat('insertHTML', `<span>🕒 ${new Date().toLocaleString()}</span>&nbsp;`)}
-          className="p-1.5 rounded-lg hover:bg-white/10 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition"
-          title="Insert timestamp"
-        >
-          <Clock className="w-3.5 h-3.5 text-cyan-400" />
-        </button>
-      </div>
+          <button
+            onClick={insertTimestamp}
+            className="p-1.5 rounded-lg hover:bg-white/10 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition"
+            title="Insert timestamp"
+          >
+            <Clock className="w-3.5 h-3.5 text-cyan-400" />
+          </button>
+        </div>
       )}
 
       {/* Floating Find & Replace Bar */}
@@ -964,74 +927,90 @@ export const Editor: React.FC<EditorProps> = ({
         totalMatches={matches.length}
       />
 
-      {/* Main Workspace Area (Editor + Outline Drawer) */}
+      {/* Main Workspace Area (Editor / Split / Preview + Outline Drawer) */}
       <div className="flex-1 flex overflow-hidden relative">
-        {/* Unified Clean Rich Text Canvas */}
-        <div className="flex-1 h-full p-6 overflow-y-auto bg-[var(--bg-primary)]">
-          <div className={`${editorWidth === 'compact' ? 'max-w-2xl mx-auto' : editorWidth === 'comfortable' ? 'max-w-4xl mx-auto' : 'w-full'} space-y-4`}>
-            <div
-              ref={previewRef}
-              contentEditable={true}
-              suppressContentEditableWarning
-              onInput={handlePreviewInput}
-              onPaste={handlePaste}
-              onClick={handleCanvasClick}
-              className={`markdown-preview outline-none leading-relaxed text-sm ${fontClassMap[font] || 'font-sans'} cursor-text min-h-[450px] p-3 rounded-xl focus:ring-1 focus:ring-[var(--accent)]/20 transition`}
-            />
+        <div className="flex-1 h-full flex overflow-hidden bg-[var(--bg-primary)] p-4">
+          <div className={`${editorWidth === 'compact' ? 'max-w-2xl mx-auto' : editorWidth === 'comfortable' ? 'max-w-4xl mx-auto' : 'w-full'} flex-1 flex gap-4 h-full overflow-hidden`}>
+            
+            {/* Raw Markdown Editor Pane (Visible in Edit & Split modes) */}
+            {(viewMode === 'edit' || viewMode === 'split') && (
+              <div className="flex-1 h-full flex flex-col min-w-0 bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-xl p-3 shadow-inner">
+                <textarea
+                  ref={textareaRef}
+                  value={note.content}
+                  onChange={(e) => handleContentChange(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  placeholder="Type your markdown content here..."
+                  className={`w-full h-full bg-transparent text-[var(--text-primary)] outline-none resize-none leading-relaxed text-sm ${fontClassMap[font] || 'font-sans'} placeholder:text-[var(--text-muted)]`}
+                />
+              </div>
+            )}
 
-            {/* Note Attachments Section */}
-            {note.attachments && note.attachments.length > 0 && (
-              <div className="border-t border-[var(--border-color)] pt-4 space-y-2">
-                <div className="text-xs font-semibold text-[var(--text-muted)] flex items-center gap-1.5 uppercase tracking-wider">
-                  <Paperclip className="w-3.5 h-3.5 text-[var(--accent)]" />
-                  <span>Attachments ({note.attachments.length})</span>
-                </div>
+            {/* Rendered Live Markdown Preview Pane (Visible in Preview & Split modes) */}
+            {(viewMode === 'preview' || viewMode === 'split') && (
+              <div className="flex-1 h-full overflow-y-auto bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-xl p-4 shadow-inner">
+                <div
+                  ref={previewRef}
+                  onClick={handleCanvasClick}
+                  dangerouslySetInnerHTML={{ __html: renderedHtml }}
+                  className={`markdown-preview leading-relaxed text-sm ${fontClassMap[font] || 'font-sans'}`}
+                />
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
-                  {note.attachments.map((att) => {
-                    const isImg = att.type.startsWith('image/');
-                    return (
-                      <div
-                        key={att.id}
-                        className="flex items-center justify-between p-2.5 rounded-xl bg-[var(--bg-secondary)] border border-[var(--border-color)] text-xs group hover:border-[var(--accent)] transition"
-                      >
-                        <div className="flex items-center gap-2 truncate">
-                          {isImg ? (
-                            <ImageIcon className="w-4 h-4 text-emerald-400 shrink-0" />
-                          ) : (
-                            <File className="w-4 h-4 text-cyan-400 shrink-0" />
-                          )}
-                          <div className="truncate">
-                            <p className="font-medium text-[var(--text-primary)] truncate">{att.name}</p>
-                            <p className="text-[10px] text-[var(--text-muted)] font-mono">
-                              {(att.size / 1024).toFixed(1)} KB
-                            </p>
-                          </div>
-                        </div>
+                {/* Note Attachments Section */}
+                {note.attachments && note.attachments.length > 0 && (
+                  <div className="border-t border-[var(--border-color)] pt-4 mt-6 space-y-2">
+                    <div className="text-xs font-semibold text-[var(--text-muted)] flex items-center gap-1.5 uppercase tracking-wider">
+                      <Paperclip className="w-3.5 h-3.5 text-[var(--accent)]" />
+                      <span>Attachments ({note.attachments.length})</span>
+                    </div>
 
-                        <div className="flex items-center gap-1 shrink-0">
-                          <a
-                            href={att.url}
-                            download={att.name}
-                            className="p-1 rounded hover:bg-white/10 text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
-                            title="Download Attachment"
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {note.attachments.map((att) => {
+                        const isImg = att.type.startsWith('image/');
+                        return (
+                          <div
+                            key={att.id}
+                            className="flex items-center justify-between p-2.5 rounded-xl bg-[var(--bg-tertiary)] border border-[var(--border-color)] text-xs group hover:border-[var(--accent)] transition"
                           >
-                            <Download className="w-3.5 h-3.5" />
-                          </a>
-                          {onRemoveAttachment && (
-                            <button
-                              onClick={() => onRemoveAttachment(note.id, att.id)}
-                              className="p-1 rounded hover:bg-rose-500/20 text-[var(--text-muted)] hover:text-rose-400"
-                              title="Delete Attachment"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
+                            <div className="flex items-center gap-2 truncate">
+                              {isImg ? (
+                                <ImageIcon className="w-4 h-4 text-emerald-400 shrink-0" />
+                              ) : (
+                                <File className="w-4 h-4 text-cyan-400 shrink-0" />
+                              )}
+                              <div className="truncate">
+                                <p className="font-medium text-[var(--text-primary)] truncate">{att.name}</p>
+                                <p className="text-[10px] text-[var(--text-muted)] font-mono">
+                                  {(att.size / 1024).toFixed(1)} KB
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-1 shrink-0">
+                              <a
+                                href={att.url}
+                                download={att.name}
+                                className="p-1 rounded hover:bg-white/10 text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+                                title="Download Attachment"
+                              >
+                                <Download className="w-3.5 h-3.5" />
+                              </a>
+                              {onRemoveAttachment && (
+                                <button
+                                  onClick={() => onRemoveAttachment(note.id, att.id)}
+                                  className="p-1 rounded hover:bg-rose-500/20 text-[var(--text-muted)] hover:text-rose-400"
+                                  title="Delete Attachment"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -1052,9 +1031,9 @@ export const Editor: React.FC<EditorProps> = ({
         onClose={() => setIsLinkModalOpen(false)}
         onInsert={(url, text) => {
           if (text) {
-            execRichFormat('insertHTML', `<a href="${url}" target="_blank" rel="noopener noreferrer" style="color:var(--accent);text-decoration:underline;">${text}</a>&nbsp;`);
+            insertFormatting(`[${text}](`, `)`, url);
           } else {
-            execRichFormat('createLink', url);
+            insertFormatting(`[${url}](`, `)`);
           }
         }}
       />

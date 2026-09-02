@@ -145,7 +145,26 @@ export function loadNotesFromStorage(): Note[] {
 
 export function saveNotesToStorage(notes: Note[]): void {
   try {
-    localStorage.setItem(NOTES_KEY, JSON.stringify(notes));
+    const cleanNotes = notes.map((n) => ({
+      id: n.id,
+      title: typeof n.title === 'string' ? n.title : String(n.title || ''),
+      content: typeof n.content === 'string' ? n.content : String(n.content || ''),
+      folderId: n.folderId,
+      tags: Array.isArray(n.tags) ? n.tags.filter((t) => typeof t === 'string') : [],
+      isPinned: Boolean(n.isPinned),
+      isFavorite: Boolean(n.isFavorite),
+      isArchived: Boolean(n.isArchived),
+      isTrash: Boolean(n.isTrash),
+      createdAt: typeof n.createdAt === 'number' ? n.createdAt : Date.now(),
+      updatedAt: typeof n.updatedAt === 'number' ? n.updatedAt : Date.now(),
+      wordTargetGoal: n.wordTargetGoal,
+      fileType: n.fileType,
+      filePath: n.filePath,
+      revisions: n.revisions,
+      attachments: n.attachments,
+      template: n.template,
+    }));
+    localStorage.setItem(NOTES_KEY, JSON.stringify(cleanNotes));
   } catch (e) {
     console.error('Failed to save notes to storage:', e);
   }

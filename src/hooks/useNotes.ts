@@ -225,7 +225,7 @@ export function useNotes() {
     setActiveNoteId(newNote.id);
     showToast(`Created note from ${tmpl.label}`, 'success');
     return newNote;
-  }, [filter.folderId, settings.wordGoal, showToast]);
+  }, [filter.folderId, settings.wordGoal, setActiveNoteId, showToast]);
 
   const createNote = useCallback((folderId?: string) => {
     return createNoteFromTemplate('blank', folderId);
@@ -344,7 +344,7 @@ export function useNotes() {
       const remaining = notes.filter((n) => n.id !== id && !n.isTrash);
       setActiveNoteId(remaining.length > 0 ? remaining[0].id : null);
     }
-  }, [activeNoteId, notes, showToast]);
+  }, [activeNoteId, notes, setActiveNoteId, showToast]);
 
   const restoreNote = useCallback((id: string) => {
     setNotes((prev) =>
@@ -357,7 +357,7 @@ export function useNotes() {
       })
     );
     setActiveNoteId(id);
-  }, [showToast]);
+  }, [setActiveNoteId, showToast]);
 
   const permanentDeleteNote = useCallback((id: string) => {
     setNotes((prev) => prev.filter((n) => n.id !== id));
@@ -365,7 +365,7 @@ export function useNotes() {
       setActiveNoteId(null);
     }
     showToast('Permanently deleted note', 'info');
-  }, [activeNoteId, showToast]);
+  }, [activeNoteId, setActiveNoteId, showToast]);
 
   const createRevisionSnapshot = useCallback((id: string) => {
     setNotes((prev) =>
@@ -433,7 +433,7 @@ export function useNotes() {
     setNotes((prev) => [dup, ...prev]);
     setActiveNoteId(dup.id);
     showToast('Duplicated note', 'success');
-  }, [notes, showToast]);
+  }, [notes, setActiveNoteId, showToast]);
 
   const addFolder = useCallback((name: string, color?: string) => {
     if (!name.trim()) return;
@@ -485,7 +485,7 @@ export function useNotes() {
       if (backup.notes.length > 0) setActiveNoteId(backup.notes[0].id);
       showToast('Successfully imported backup data', 'success');
     }
-  }, [showToast]);
+  }, [setActiveNoteId, showToast]);
 
   return {
     notes,

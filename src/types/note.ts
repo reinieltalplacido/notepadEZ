@@ -53,6 +53,7 @@ export interface Note {
   wordTargetGoal?: number;
   revisions?: NoteRevision[];
   fileType?: FileExtension;
+  filePath?: string;
   attachments?: AttachmentFile[];
   template?: TemplateType;
 }

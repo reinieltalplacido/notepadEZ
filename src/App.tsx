@@ -110,7 +110,7 @@ export function App() {
       const result = await window.electronAPI.openFileDialog();
       if (result) {
         const newNote = createNote();
-        updateNote(newNote.id, { title: result.filename, content: result.content });
+        updateNote(newNote.id, { title: result.filename, content: result.content, filePath: result.filePath });
         showToast(`Opened ${result.filename}`, 'success');
       }
     }
@@ -135,10 +135,10 @@ export function App() {
       const result = await window.electronAPI.saveFileDialog({
         content: activeNote.content,
         defaultName: defaultFilename,
-        filePath: forceSaveAs ? undefined : undefined,
+        filePath: forceSaveAs ? undefined : activeNote.filePath,
       });
       if (result) {
-        updateNote(activeNote.id, { title: result.filename });
+        updateNote(activeNote.id, { title: result.filename, filePath: result.filePath });
         showToast(`Saved ${result.filename}`, 'success');
       }
     } else {

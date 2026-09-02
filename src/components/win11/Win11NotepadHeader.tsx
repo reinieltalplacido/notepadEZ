@@ -118,29 +118,23 @@ export const Win11NotepadHeader: React.FC<Win11NotepadHeaderProps> = ({
   const applyHeading = (level: string) => {
     if (!activeNote) return;
     const content = activeNote.content;
-    const cleanContent = content.replace(/^(#{1,6}\s+)/, '');
+    const lines = content.split('\n');
+    const firstLine = lines[0] || '';
+    const cleanFirstLine = firstLine.replace(/^(#{1,6}\s+)/, '');
+
     if (level === 'normal') {
-      onUpdateNote(activeNote.id, { content: cleanContent });
+      lines[0] = cleanFirstLine;
     } else {
-      const prefix = `#${level} `;
-      if (content.startsWith(prefix)) {
-        onUpdateNote(activeNote.id, { content: cleanContent });
-      } else {
-        onUpdateNote(activeNote.id, { content: `${prefix}${cleanContent}` });
-      }
+      const prefix = `${'#'.repeat(parseInt(level, 10))} `;
+      lines[0] = firstLine.startsWith(prefix) ? cleanFirstLine : `${prefix}${cleanFirstLine}`;
     }
+    onUpdateNote(activeNote.id, { content: lines.join('\n') });
   };
 
   const applyInline = (symbol: string) => {
     if (!activeNote) return;
     const content = activeNote.content;
-    const len = symbol.length;
-    if (content.length >= len * 2 && content.startsWith(symbol) && content.endsWith(symbol) && !(symbol === '*' && content.startsWith('**'))) {
-      const unwrapped = content.substring(len, content.length - len);
-      onUpdateNote(activeNote.id, { content: unwrapped });
-    } else {
-      onUpdateNote(activeNote.id, { content: `${symbol}${content}${symbol}` });
-    }
+    onUpdateNote(activeNote.id, { content: `${content}\n${symbol}text${symbol}` });
   };
 
   return (
