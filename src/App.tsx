@@ -4,6 +4,7 @@ import { ViewMode, ThemeMode, FontChoice } from './types/note';
 import { Win11NotepadHeader } from './components/win11/Win11NotepadHeader';
 import { WinStatusBar } from './components/win11/WinStatusBar';
 import { WinSettingsModal } from './components/win11/WinSettingsModal';
+import { TemplateSelectModal } from './components/TemplateSelectModal';
 import { Sidebar } from './components/Sidebar';
 import { NoteList } from './components/NoteList';
 import { Editor } from './components/Editor';
@@ -69,6 +70,7 @@ export function App() {
   const [isAudioPlayerOpen, setIsAudioPlayerOpen] = useState(false);
   const [isShortcutsOpen, setIsShortcutsOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
 
   // Cursor Line & Col tracking
   const [cursorLine, setCursorLine] = useState(1);
@@ -175,7 +177,7 @@ export function App() {
       }
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'n') {
         e.preventDefault();
-        createNote();
+        setIsTemplateModalOpen(true);
       }
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'o') {
         e.preventDefault();
@@ -259,7 +261,7 @@ export function App() {
             setFilter={setFilter}
             folders={folders}
             tags={tags}
-            onCreateNote={createNote}
+            onCreateNote={() => setIsTemplateModalOpen(true)}
             onTogglePin={togglePin}
             onToggleFavorite={toggleFavorite}
             onDuplicateNote={duplicateNote}
@@ -337,6 +339,12 @@ export function App() {
       <ShortcutsModal
         isOpen={isShortcutsOpen}
         onClose={() => setIsShortcutsOpen(false)}
+      />
+
+      <TemplateSelectModal
+        isOpen={isTemplateModalOpen}
+        onClose={() => setIsTemplateModalOpen(false)}
+        onSelectTemplate={(templateType) => createNoteFromTemplate(templateType)}
       />
 
       <Toast toast={toast} onClose={() => setToast(null)} />

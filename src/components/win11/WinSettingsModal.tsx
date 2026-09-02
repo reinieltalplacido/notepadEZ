@@ -18,13 +18,13 @@ export const WinSettingsModal: React.FC<WinSettingsModalProps> = ({
 }) => {
   if (!isOpen) return null;
 
-  const themes: { id: ThemeMode; name: string; icon?: string }[] = [
-    { id: 'minimal-light', name: 'Light Mode (Windows 11 Default)' },
-    { id: 'cyber-dark', name: 'Dark Mode (Obsidian Cyber)' },
-    { id: 'neon-matrix', name: 'Neon Matrix' },
-    { id: 'sunset-glow', name: 'Sunset Glow' },
-    { id: 'nordic-frost', name: 'Nordic Frost' },
-    { id: 'transparent', name: 'Transparent / Acrylic' },
+  const themes: { id: ThemeMode; name: string; bg: string; accent: string }[] = [
+    { id: 'minimal-light', name: 'Light Mode (Windows 11)', bg: '#f8fafc', accent: '#2563eb' },
+    { id: 'cyber-dark', name: 'Dark Mode (Obsidian Cyber)', bg: '#070913', accent: '#6366f1' },
+    { id: 'neon-matrix', name: 'Neon Matrix', bg: '#050b07', accent: '#10b981' },
+    { id: 'sunset-glow', name: 'Sunset Glow', bg: '#120816', accent: '#ec4899' },
+    { id: 'nordic-frost', name: 'Nordic Frost', bg: '#0f172a', accent: '#38bdf8' },
+    { id: 'transparent', name: 'Transparent / Acrylic Glass', bg: 'rgba(15, 23, 42, 0.4)', accent: '#a855f7' },
   ];
 
   return createPortal(
@@ -46,21 +46,29 @@ export const WinSettingsModal: React.FC<WinSettingsModalProps> = ({
           <label className="font-semibold text-[var(--text-secondary)] block uppercase tracking-wider text-[10px]">
             App Theme
           </label>
-          <div className="space-y-1">
-            {themes.map((t) => (
-              <button
-                key={t.id}
-                onClick={() => onUpdateSettings({ theme: t.id })}
-                className={`w-full text-left px-3 py-2 rounded-xl transition flex items-center justify-between border ${
-                  settings.theme === t.id
-                    ? 'bg-[var(--accent)] text-white border-[var(--accent)] shadow-sm'
-                    : 'bg-[var(--bg-tertiary)] text-[var(--text-secondary)] border-[var(--border-color)] hover:border-[var(--border-highlight)]'
-                }`}
-              >
-                <span>{t.name}</span>
-                {settings.theme === t.id && <span className="text-[10px] font-mono font-bold">ACTIVE</span>}
-              </button>
-            ))}
+          <div className="grid grid-cols-2 gap-2">
+            {themes.map((t) => {
+              const isSelected = settings.theme === t.id;
+              return (
+                <button
+                  key={t.id}
+                  onClick={() => onUpdateSettings({ theme: t.id })}
+                  className={`p-2.5 rounded-xl transition flex flex-col justify-between gap-2 border text-left ${
+                    isSelected
+                      ? 'bg-[var(--accent)] text-white border-[var(--accent)] shadow-md'
+                      : 'bg-[var(--bg-tertiary)] text-[var(--text-secondary)] border-[var(--border-color)] hover:border-[var(--border-highlight)]'
+                  }`}
+                >
+                  <div className="flex items-center justify-between w-full">
+                    <span className="font-medium text-[11px] truncate">{t.name}</span>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <span className="w-2.5 h-2.5 rounded-full border border-white/20" style={{ background: t.bg }} />
+                      <span className="w-2.5 h-2.5 rounded-full" style={{ background: t.accent }} />
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
           </div>
         </div>
 

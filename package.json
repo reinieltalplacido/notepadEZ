@@ -2,6 +2,8 @@
   "name": "notepadez",
   "private": true,
   "version": "1.0.0",
+  "description": "notepadEZ — Supercharged Personal Workspace",
+  "author": "NotepadEZ Team",
   "type": "module",
   "main": "electron/main.cjs",
   "scripts": {
@@ -16,14 +18,17 @@
     "appId": "com.notepadez.app",
     "productName": "Notepad",
     "directories": {
-      "output": "dist-electron"
+      "output": "release"
     },
     "files": [
       "dist/**/*",
       "electron/**/*"
     ],
     "win": {
-      "target": ["nsis", "portable"]
+      "target": [
+        "nsis",
+        "portable"
+      ]
     }
   },
   "dependencies": {
@@ -40,7 +45,7 @@
     "@types/react-dom": "^19.2.4",
     "@vitejs/plugin-react": "^6.1.0",
     "concurrently": "^10.0.5",
-    "electron": "^44.1.0",
+    "electron": "^31.0.0",
     "electron-builder": "^26.15.3",
     "oxlint": "^1.79.0",
     "tailwindcss": "^4.3.3",
