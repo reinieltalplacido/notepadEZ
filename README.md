@@ -2,14 +2,14 @@
 
 > A modern, sleek, Windows 11 Fluent-inspired desktop & web notepad built with **React**, **TypeScript**, **Tailwind CSS**, **Vite**, and **Electron**.
 
-![notepadEZ](/src/assets/hero.png)
+![notepadEZ Logo](./src/assets/logo.png)
 
 ---
 
 ## ✨ Features
 
 - 🎨 **Windows 11 Fluent UI Design**: Modern rounded tabs, top accent indicators, frosted glass panel blur, and sleek dark/light acrylic themes.
-- ✍️ **Pure Rich Text & WYSIWYG Editor**: Write naturally with direct visual formatting (**Bold**, *Italic*, Headings, Bullet & Numbered Lists, Code Blocks, Blockquotes, Tables, Checklists). No raw markdown syntax tags (`**`, `#`, `*`) clutered on screen.
+- ✍️ **Pure Rich Text & WYSIWYG Editor**: Write naturally with direct visual formatting (**Bold**, _Italic_, Headings, Bullet & Numbered Lists, Code Blocks, Blockquotes, Tables, Checklists). No raw markdown syntax tags (`**`, `#`, `*`) clutered on screen.
 - 📋 **Smart Markdown Paste Auto-Conversion**: Automatically transforms pasted markdown text (from ChatGPT, GitHub, or documentation) into clean formatted HTML elements instantly.
 - 🖥️ **Pure Edge-to-Edge Full Screen Mode**: Distraction-free writing canvas toggled via **`F11`** or **`Ctrl+Shift+F`** with zero header clutter.
 - 💾 **Real-time Auto-Save & Session Restoration**: Automatically saves all notes, active tab state, and open note tabs in real-time. Reopen the app anytime without losing drafts.
@@ -26,26 +26,31 @@
 ### Prerequisites
 
 Ensure you have the following installed on your system:
+
 - **Node.js**: `v18.0.0` or higher ([Download Node.js](https://nodejs.org/))
 - **npm**: `v9.0.0` or higher (comes with Node.js)
 
 ### 📥 Installation
 
 1. **Clone the Repository**:
+
    ```bash
    git clone https://github.com/reinieltalplacido/notepadEZ.git
    cd notepadEZ
    ```
 
 2. **Install Dependencies**:
+
    ```bash
    npm install
    ```
 
 3. **Run in Development Mode (Web)**:
+
    ```bash
    npm run dev
    ```
+
    Open your browser at `http://localhost:5173`.
 
 4. **Run Desktop App (Electron Development)**:
@@ -58,14 +63,17 @@ Ensure you have the following installed on your system:
 ## 🛠️ Building & Packaging
 
 ### Build Web Application
+
 ```bash
 npm run build
 ```
 
 ### Package Desktop App (Windows / macOS / Linux)
+
 ```bash
 npm run build:electron
 ```
+
 The compiled binaries will be output to the `release/` directory.
 
 ---
@@ -80,22 +88,26 @@ Contributions, issues, and feature requests are welcome! Feel free to check out 
    Click the **Fork** button at the top right of the [notepadEZ GitHub page](https://github.com/reinieltalplacido/notepadEZ).
 
 2. **Create a Feature Branch**:
+
    ```bash
    git checkout -b feature/amazing-feature
    ```
 
 3. **Make & Verify your Changes**:
    Ensure all TypeScript checks pass cleanly:
+
    ```bash
    npx tsc -b
    ```
 
 4. **Commit your Changes**:
+
    ```bash
    git commit -m 'feat: Add some amazing feature'
    ```
 
 5. **Push to the Branch**:
+
    ```bash
    git push origin feature/amazing-feature
    ```
@@ -114,4 +126,5 @@ This project is licensed under the [MIT License](LICENSE).
 ## 👨‍💻 Author
 
 Created with ❤️ by **Reiniel Talplacido**
+
 - GitHub: [@reinieltalplacido](https://github.com/reinieltalplacido)
