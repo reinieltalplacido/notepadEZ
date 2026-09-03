@@ -10,8 +10,6 @@ import {
   saveTagsToStorage,
   loadSettingsFromStorage,
   saveSettingsToStorage,
-  DEFAULT_FOLDERS,
-  DEFAULT_TAGS
 } from '../utils/storage';
 
 export interface ToastMessage {
@@ -46,7 +44,9 @@ export function useNotes() {
         const parsed: string[] = JSON.parse(savedTabs);
         const valid = parsed.filter((id) => loaded.some((n) => n.id === id && !n.isTrash));
         if (valid.length > 0) return valid;
-      } catch (e) {}
+      } catch {
+        // Fallback to active non-trash notes
+      }
     }
     return loaded.filter((n) => !n.isTrash).map((n) => n.id);
   });

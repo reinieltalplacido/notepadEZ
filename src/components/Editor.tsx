@@ -125,7 +125,7 @@ export const Editor: React.FC<EditorProps> = ({
     lastContentRef.current = content;
   }, []);
 
-  const handleEditorInput = () => {
+  const handleEditorInput = useCallback(() => {
     if (!note || !editorRef.current) return;
     const newHtml = editorRef.current.innerHTML;
 
@@ -135,7 +135,7 @@ export const Editor: React.FC<EditorProps> = ({
     }, 400);
 
     onUpdateNote(note.id, { content: newHtml });
-  };
+  }, [note, pushToUndo, onUpdateNote]);
 
   const handleUndo = useCallback(() => {
     if (!note || undoStack.length === 0 || !editorRef.current) return;
@@ -163,7 +163,7 @@ export const Editor: React.FC<EditorProps> = ({
     editorRef.current.focus();
     document.execCommand(command, false, value);
     handleEditorInput();
-  }, []);
+  }, [handleEditorInput]);
 
   const insertTableTemplate = useCallback(() => {
     const tableHtml = `
@@ -296,7 +296,7 @@ export const Editor: React.FC<EditorProps> = ({
     }
   }, [note, matches, handleEditorInput]);
 
-  const handleSelectHeader = useCallback((line: number) => {
+  const handleSelectHeader = useCallback((_line: number) => {
     if (!note || !editorRef.current) return;
     editorRef.current.focus();
   }, [note]);

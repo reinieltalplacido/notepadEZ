@@ -1,7 +1,7 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
 import { AppSettings, ThemeMode, FontChoice } from '../../types/note';
-import { X, Settings as SettingsIcon, Sun, Moon, Monitor, Type } from 'lucide-react';
+import { X, Settings as SettingsIcon } from 'lucide-react';
 
 interface WinSettingsModalProps {
   isOpen: boolean;

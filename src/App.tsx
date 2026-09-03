@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNotes } from './hooks/useNotes';
-import { ViewMode, ThemeMode, FontChoice } from './types/note';
+import { ThemeMode } from './types/note';
 import { Win11NotepadHeader } from './components/win11/Win11NotepadHeader';
 import { WinStatusBar } from './components/win11/WinStatusBar';
 import { WinSettingsModal } from './components/win11/WinSettingsModal';
@@ -44,35 +44,29 @@ export function App() {
     addTag,
     deleteTag,
     updateSettings,
-    restoreBackupData,
     createRevisionSnapshot,
     restoreRevision,
     openTabIds,
     closeTab,
   } = useNotes();
 
-  const [viewMode, setViewMode] = useState<ViewMode>('preview');
   const [isFullScreen, setIsFullScreen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isNoteListOpen, setIsNoteListOpen] = useState(true);
 
-  const toggleFullScreen = () => {
+  const toggleFullScreen = useCallback(() => {
     setIsFullScreen((prev) => {
       const next = !prev;
       setIsSidebarOpen(!next);
       return next;
     });
-  };
+  }, []);
   const [isFocusModeOpen, setIsFocusModeOpen] = useState(false);
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
   const [isShortcutsOpen, setIsShortcutsOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
-
-  // Cursor Line & Col tracking
-  const [cursorLine, setCursorLine] = useState(1);
-  const [cursorCol, setCursorCol] = useState(1);
 
   // Apply theme — also makes body transparent for the acrylic theme
   useEffect(() => {
@@ -290,8 +284,8 @@ export function App() {
       {!isFullScreen && (
         <WinStatusBar
           content={activeNote ? activeNote.content : ''}
-          cursorLine={cursorLine}
-          cursorCol={cursorCol}
+          cursorLine={1}
+          cursorCol={1}
           zoomPercent={100}
           fileType={activeNote?.fileType || 'txt'}
           onFileTypeChange={(type) => activeNote && updateNote(activeNote.id, { fileType: type as any })}

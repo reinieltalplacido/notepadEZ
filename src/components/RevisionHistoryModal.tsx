@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Note, NoteRevision } from '../types/note';
-import { History, RotateCcw, Plus, X, Calendar, FileText, ArrowRight } from 'lucide-react';
+import { History, RotateCcw, Plus, X, Calendar, FileText } from 'lucide-react';
 
 interface RevisionHistoryModalProps {
   isOpen: boolean;

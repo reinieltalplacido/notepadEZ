@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Note } from '../types/note';
 import { renderMarkdown, calculateNoteStats } from '../utils/markdown';
-import { Minimize2, Edit3, Eye, Sliders } from 'lucide-react';
+import { Minimize2, Sliders } from 'lucide-react';
 
 interface FocusModeProps {
   isOpen: boolean;
@@ -21,7 +21,6 @@ export const FocusMode: React.FC<FocusModeProps> = ({
 }) => {
   const [mode, setMode] = useState<'write' | 'preview'>('write');
   const [editorWidth, setEditorWidth] = useState<'narrow' | 'medium' | 'wide'>('medium');
-  const [fontSizePx, setFontSizePx] = useState<number>(18);
 
   if (!isOpen || !note) return null;
 
@@ -105,7 +104,6 @@ export const FocusMode: React.FC<FocusModeProps> = ({
               value={note.content}
               onChange={(e) => onUpdateNote(note.id, { content: e.target.value })}
               placeholder="Write seamlessly..."
-              style={{ fontSize: `${fontSizePx}px` }}
               className={`w-full min-h-[500px] bg-transparent outline-none resize-none leading-relaxed text-[var(--text-primary)] placeholder:text-[var(--text-muted)] ${fontClassMap[font] || 'font-sans'}`}
               autoFocus
             />

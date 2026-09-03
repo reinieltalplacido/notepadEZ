@@ -1,27 +1,21 @@
 import React, { useState } from 'react';
-import { ViewMode, ThemeMode, FontChoice, Note, Folder, Tag } from '../types/note';
+import { ThemeMode, FontChoice, Note, Folder, Tag } from '../types/note';
 import {
-  Edit3,
-  Columns,
-  Eye,
   Sparkles,
   Volume2,
   Maximize2,
   Download,
   Command,
   HelpCircle,
-  Moon,
   Palette,
   FileText,
   FileCode,
   FileSpreadsheet,
-  Database
+  Database,
 } from 'lucide-react';
 import { exportNoteAsMarkdown, exportNoteAsText, exportNoteAsHtml, exportFullBackupJSON } from '../utils/export';
 
 interface HeaderProps {
-  viewMode: ViewMode;
-  setViewMode: (mode: ViewMode) => void;
   activeNote: Note | null;
   notes: Note[];
   folders: Folder[];
@@ -38,8 +32,6 @@ interface HeaderProps {
 }
 
 export const Header: React.FC<HeaderProps> = ({
-  viewMode,
-  setViewMode,
   activeNote,
   notes,
   folders,

@@ -41,7 +41,7 @@ export const NoteList: React.FC<NoteListProps> = ({
   filter,
   setFilter,
   folders,
-  tags,
+  tags: _tags,
   onCreateNote,
   onTogglePin,
   onToggleFavorite,
