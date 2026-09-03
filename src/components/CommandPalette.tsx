@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Note, ThemeMode, ViewMode } from '../types/note';
-import { Command, Search, Plus, Palette, Maximize2, Volume2, Trash2, Edit3, Columns, Eye, X } from 'lucide-react';
+import { Note, ThemeMode } from '../types/note';
+import { Search, Plus, Palette, X } from 'lucide-react';
 
 interface CommandPaletteProps {
   isOpen: boolean;
@@ -10,9 +10,6 @@ interface CommandPaletteProps {
   onSelectNote: (id: string) => void;
   onCreateNote: () => void;
   setTheme: (theme: ThemeMode) => void;
-  setViewMode: (mode: ViewMode) => void;
-  onOpenFocusMode: () => void;
-  onOpenAudioPlayer: () => void;
 }
 
 export const CommandPalette: React.FC<CommandPaletteProps> = ({
@@ -22,9 +19,6 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
   onSelectNote,
   onCreateNote,
   setTheme,
-  setViewMode,
-  onOpenFocusMode,
-  onOpenAudioPlayer,
 }) => {
   const [query, setQuery] = useState('');
 
@@ -49,24 +43,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
         onClose();
       },
     },
-    {
-      id: 'focus-mode',
-      title: 'Open Zen Focus Mode',
-      icon: <Maximize2 className="w-4 h-4 text-indigo-400" />,
-      run: () => {
-        onOpenFocusMode();
-        onClose();
-      },
-    },
-    {
-      id: 'audio-player',
-      title: 'Open Ambient Focus Sounds',
-      icon: <Volume2 className="w-4 h-4 text-cyan-400" />,
-      run: () => {
-        onOpenAudioPlayer();
-        onClose();
-      },
-    },
+
     {
       id: 'theme-cyber',
       title: 'Switch Theme to Cyber Dark',

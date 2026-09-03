@@ -108,45 +108,7 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
       </div>
 
-      {/* View Mode Segmented Controls */}
-      <div className="flex items-center bg-[var(--bg-tertiary)] p-1 rounded-xl border border-[var(--border-color)]">
-        <button
-          onClick={() => setViewMode('edit')}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-            viewMode === 'edit'
-              ? 'bg-[var(--accent)] text-white shadow-md shadow-[var(--accent-glow)]'
-              : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-          }`}
-          title="Write Mode"
-        >
-          <Edit3 className="w-3.5 h-3.5" />
-          <span className="hidden sm:inline">Write</span>
-        </button>
-        <button
-          onClick={() => setViewMode('split')}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-            viewMode === 'split'
-              ? 'bg-[var(--accent)] text-white shadow-md shadow-[var(--accent-glow)]'
-              : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-          }`}
-          title="Split Editor & Live Markdown"
-        >
-          <Columns className="w-3.5 h-3.5" />
-          <span className="hidden sm:inline">Split</span>
-        </button>
-        <button
-          onClick={() => setViewMode('preview')}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-            viewMode === 'preview'
-              ? 'bg-[var(--accent)] text-white shadow-md shadow-[var(--accent-glow)]'
-              : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-          }`}
-          title="Preview Mode"
-        >
-          <Eye className="w-3.5 h-3.5" />
-          <span className="hidden sm:inline">Preview</span>
-        </button>
-      </div>
+
 
       {/* Actions Toolbar */}
       <div className="flex items-center gap-2">

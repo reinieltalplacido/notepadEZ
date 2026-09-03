@@ -10,7 +10,6 @@ import { NoteList } from './components/NoteList';
 import { Editor } from './components/Editor';
 import { FocusMode } from './components/FocusMode';
 import { CommandPalette } from './components/CommandPalette';
-import { AmbientPlayer } from './components/AmbientPlayer';
 import { ShortcutsModal } from './components/ShortcutsModal';
 import { Toast } from './components/Toast';
 
@@ -67,7 +66,6 @@ export function App() {
   };
   const [isFocusModeOpen, setIsFocusModeOpen] = useState(false);
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
-  const [isAudioPlayerOpen, setIsAudioPlayerOpen] = useState(false);
   const [isShortcutsOpen, setIsShortcutsOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
@@ -196,7 +194,6 @@ export function App() {
         setIsSidebarOpen(true);
         setIsFocusModeOpen(false);
         setIsCommandPaletteOpen(false);
-        setIsAudioPlayerOpen(false);
         setIsShortcutsOpen(false);
         setIsSettingsOpen(false);
       }
@@ -275,8 +272,6 @@ export function App() {
         {/* Text Canvas Editor */}
         <Editor
           note={activeNote}
-          viewMode={viewMode}
-          onViewModeChange={setViewMode}
           folders={folders}
           tags={tags}
           onUpdateNote={updateNote}
@@ -326,14 +321,6 @@ export function App() {
         onSelectNote={(id) => setActiveNoteId(id)}
         onCreateNote={createNote}
         setTheme={(theme: ThemeMode) => updateSettings({ theme })}
-        setViewMode={setViewMode}
-        onOpenFocusMode={() => setIsFocusModeOpen(true)}
-        onOpenAudioPlayer={() => setIsAudioPlayerOpen(true)}
-      />
-
-      <AmbientPlayer
-        isOpen={isAudioPlayerOpen}
-        onClose={() => setIsAudioPlayerOpen(false)}
       />
 
       <ShortcutsModal

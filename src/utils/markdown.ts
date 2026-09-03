@@ -15,12 +15,14 @@ export function calculateNoteStats(text: string): MarkdownStats {
     return { words: 0, chars: 0, charsNoSpaces: 0, lines: 0, sentences: 0, paragraphs: 0, readingTimeMinutes: 0 };
   }
 
-  const chars = text.length;
-  const charsNoSpaces = text.replace(/\s/g, '').length;
-  const words = (text.trim().match(/\S+/g) || []).length;
+  // Strip HTML tags for clean statistical calculation
+  const cleanText = text.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+  const chars = cleanText.length;
+  const charsNoSpaces = cleanText.replace(/\s/g, '').length;
+  const words = (cleanText.match(/\S+/g) || []).length;
   const lines = text.split(/\r\n|\r|\n/).length;
-  const sentences = (text.match(/[^.!?]+[.!?]+/g) || []).length || (words > 0 ? 1 : 0);
-  const paragraphs = text.split(/\n\s*\n/).filter(p => p.trim().length > 0).length;
+  const sentences = (cleanText.match(/[^.!?]+[.!?]+/g) || []).length || (words > 0 ? 1 : 0);
+  const paragraphs = text.split(/(?:\n\s*){2,}/).filter(p => p.trim().length > 0).length || 1;
   const readingTimeMinutes = Math.max(1, Math.ceil(words / 200));
 
   return { words, chars, charsNoSpaces, lines, sentences, paragraphs, readingTimeMinutes };

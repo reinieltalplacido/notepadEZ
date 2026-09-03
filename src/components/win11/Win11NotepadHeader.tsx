@@ -8,13 +8,6 @@ import {
   Settings,
   Minus,
   Square,
-  Bold,
-  Italic,
-  Strikethrough,
-  Link,
-  Table,
-  Eraser,
-  List,
   Sidebar as SidebarIcon,
 } from 'lucide-react';
 
@@ -96,28 +89,7 @@ export const Win11NotepadHeader: React.FC<Win11NotepadHeaderProps> = ({
     }
   };
 
-  // Formatting helpers
-  const applyHeading = (level: string) => {
-    if (!activeNote) return;
-    const content = activeNote.content;
-    const lines = content.split('\n');
-    const firstLine = lines[0] || '';
-    const cleanFirstLine = firstLine.replace(/^(#{1,6}\s+)/, '');
 
-    if (level === 'normal') {
-      lines[0] = cleanFirstLine;
-    } else {
-      const prefix = `${'#'.repeat(parseInt(level, 10))} `;
-      lines[0] = firstLine.startsWith(prefix) ? cleanFirstLine : `${prefix}${cleanFirstLine}`;
-    }
-    onUpdateNote(activeNote.id, { content: lines.join('\n') });
-  };
-
-  const applyInline = (symbol: string) => {
-    if (!activeNote) return;
-    const content = activeNote.content;
-    onUpdateNote(activeNote.id, { content: `${content}\n${symbol}text${symbol}` });
-  };
 
   return (
     <header className="bg-[var(--bg-secondary)] border-b border-[var(--border-color)] select-none sticky top-0 z-40">
@@ -236,109 +208,7 @@ export const Win11NotepadHeader: React.FC<Win11NotepadHeaderProps> = ({
         </div>
       </div>
 
-      <div className="h-9 px-4 flex items-center gap-1 overflow-x-auto border-b border-[var(--border-color)] bg-[var(--bg-secondary)]">
-        {/* Heading Dropdown */}
-        <div className="flex items-center gap-1 bg-[var(--bg-tertiary)] px-2 py-1 rounded-lg border border-[var(--border-color)] text-xs font-semibold text-[var(--text-primary)]">
-          <select
-            onChange={(e) => applyHeading(e.target.value)}
-            className="bg-transparent outline-none cursor-pointer text-xs"
-          >
-            <option value="normal" className="bg-[var(--bg-secondary)]">Normal</option>
-            <option value="1" className="bg-[var(--bg-secondary)]">H1</option>
-            <option value="2" className="bg-[var(--bg-secondary)]">H2</option>
-            <option value="3" className="bg-[var(--bg-secondary)]">H3</option>
-          </select>
-        </div>
 
-        <div className="w-px h-4 bg-[var(--border-color)] mx-1" />
-
-        {/* Formatting Buttons */}
-        <button
-          onClick={() => applyInline('**')}
-          className="p-1.5 rounded hover:bg-white/10 text-[var(--text-secondary)] hover:text-[var(--text-primary)] font-bold text-xs"
-          title="Bold"
-        >
-          <Bold className="w-3.5 h-3.5" />
-        </button>
-
-        <button
-          onClick={() => applyInline('*')}
-          className="p-1.5 rounded hover:bg-white/10 text-[var(--text-secondary)] hover:text-[var(--text-primary)] italic text-xs"
-          title="Italic"
-        >
-          <Italic className="w-3.5 h-3.5" />
-        </button>
-
-        <button
-          onClick={() => applyInline('~~')}
-          className="p-1.5 rounded hover:bg-white/10 text-[var(--text-secondary)] hover:text-[var(--text-primary)] text-xs"
-          title="Strikethrough"
-        >
-          <Strikethrough className="w-3.5 h-3.5" />
-        </button>
-
-        <div className="w-px h-4 bg-[var(--border-color)] mx-1" />
-
-        <button
-          onClick={() => {
-            if (activeNote) onUpdateNote(activeNote.id, { content: `${activeNote.content}\n- ` });
-          }}
-          className="p-1.5 rounded hover:bg-white/10 text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
-          title="List"
-        >
-          <List className="w-3.5 h-3.5" />
-        </button>
-
-        <button
-          onClick={() => {
-            if (activeNote) onUpdateNote(activeNote.id, { content: `${activeNote.content}\n[Link](https://)` });
-          }}
-          className="p-1.5 rounded hover:bg-white/10 text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
-          title="Insert Link"
-        >
-          <Link className="w-3.5 h-3.5" />
-        </button>
-
-        <button
-          onClick={() => {
-            if (activeNote)
-              onUpdateNote(activeNote.id, {
-                content: `${activeNote.content}\n| Col 1 | Col 2 |\n| :--- | :--- |\n| Data | Data |\n`,
-              });
-          }}
-          className="p-1.5 rounded hover:bg-white/10 text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
-          title="Insert Table"
-        >
-          <Table className="w-3.5 h-3.5 text-amber-400" />
-        </button>
-
-        <button
-          onClick={() => {
-            if (activeNote) onUpdateNote(activeNote.id, { content: '' });
-          }}
-          className="p-1.5 rounded hover:bg-white/10 text-[var(--text-secondary)] hover:text-rose-400"
-          title="Clear Text"
-        >
-          <Eraser className="w-3.5 h-3.5" />
-        </button>
-
-        <div className="ml-auto flex items-center gap-2">
-          <select
-            value={activeNote?.fileType || 'txt'}
-            onChange={(e) => {
-              if (activeNote) onUpdateNote(activeNote.id, { fileType: e.target.value as any });
-            }}
-            className="text-[11px] px-2 py-0.5 rounded-lg bg-[var(--bg-tertiary)] text-[var(--accent)] font-mono border border-[var(--border-color)] outline-none cursor-pointer hover:border-[var(--accent)] transition"
-            title="Choose file format when saving"
-          >
-            <option value="txt" className="bg-[var(--bg-secondary)] text-[var(--text-primary)]">Text (.txt)</option>
-            <option value="md" className="bg-[var(--bg-secondary)] text-[var(--text-primary)]">Markdown (.md)</option>
-            <option value="html" className="bg-[var(--bg-secondary)] text-[var(--text-primary)]">HTML (.html)</option>
-            <option value="json" className="bg-[var(--bg-secondary)] text-[var(--text-primary)]">JSON (.json)</option>
-            <option value="csv" className="bg-[var(--bg-secondary)] text-[var(--text-primary)]">CSV (.csv)</option>
-          </select>
-        </div>
-      </div>
 
       {/* Right-Click Floating Tab Context Menu */}
       {tabContextMenu && (

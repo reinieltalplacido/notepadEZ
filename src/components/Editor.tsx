@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
-import { Note, ViewMode, Folder, Tag, NoteRevision, AttachmentFile } from '../types/note';
+import { Note, Folder, Tag, NoteRevision, AttachmentFile } from '../types/note';
 import { renderMarkdown } from '../utils/markdown';
 import { StatsBar } from './StatsBar';
 import { FindReplaceBar } from './FindReplaceBar';
@@ -37,15 +37,10 @@ import {
   File,
   Download,
   Trash2,
-  Edit3,
-  Eye,
-  Columns,
 } from 'lucide-react';
 
 interface EditorProps {
   note: Note | null;
-  viewMode?: ViewMode;
-  onViewModeChange?: (mode: ViewMode) => void;
   folders: Folder[];
   tags: Tag[];
   onUpdateNote: (id: string, updates: Partial<Note>) => void;
@@ -61,8 +56,6 @@ interface EditorProps {
 
 export const Editor: React.FC<EditorProps> = ({
   note,
-  viewMode = 'split',
-  onViewModeChange,
   folders,
   tags,
   onUpdateNote,
@@ -75,9 +68,8 @@ export const Editor: React.FC<EditorProps> = ({
   onAddAttachment,
   onRemoveAttachment,
 }) => {
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const editorRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const previewRef = useRef<HTMLDivElement>(null);
 
   // Search & Replace state
   const [isFindOpen, setIsFindOpen] = useState(false);
@@ -97,15 +89,34 @@ export const Editor: React.FC<EditorProps> = ({
   const currentNoteIdRef = useRef<string | null>(null);
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Reset history stack when switching active note
-  useEffect(() => {
-    if (note) {
-      currentNoteIdRef.current = note.id;
-      lastContentRef.current = note.content;
-      setUndoStack([]);
-      setRedoStack([]);
+  // Helper to format content as HTML if raw markdown is passed
+  const formatInitialHtml = (rawContent: string): string => {
+    if (!rawContent) return '';
+    // If it already looks like HTML (has HTML tags), return as is
+    if (/<[a-z][\s\S]*>/i.test(rawContent)) {
+      return rawContent;
     }
-  }, [note?.id]);
+    // Otherwise convert markdown to HTML for rich text display
+    return renderMarkdown(rawContent);
+  };
+
+  // Sync editor innerHTML when activeNote changes
+  useEffect(() => {
+    if (note && editorRef.current) {
+      if (currentNoteIdRef.current !== note.id) {
+        currentNoteIdRef.current = note.id;
+        const html = formatInitialHtml(note.content);
+        editorRef.current.innerHTML = html;
+        lastContentRef.current = html;
+        setUndoStack([]);
+        setRedoStack([]);
+      } else if (editorRef.current.innerHTML !== note.content && lastContentRef.current !== note.content) {
+        const html = formatInitialHtml(note.content);
+        editorRef.current.innerHTML = html;
+        lastContentRef.current = html;
+      }
+    }
+  }, [note?.id, note?.content]);
 
   // Push state to undo stack
   const pushToUndo = useCallback((content: string) => {
@@ -114,155 +125,87 @@ export const Editor: React.FC<EditorProps> = ({
     lastContentRef.current = content;
   }, []);
 
-  const handleContentChange = (newContent: string) => {
-    if (!note) return;
+  const handleEditorInput = () => {
+    if (!note || !editorRef.current) return;
+    const newHtml = editorRef.current.innerHTML;
 
     if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
     debounceTimerRef.current = setTimeout(() => {
-      pushToUndo(newContent);
+      pushToUndo(newHtml);
     }, 400);
 
-    onUpdateNote(note.id, { content: newContent });
+    onUpdateNote(note.id, { content: newHtml });
   };
 
   const handleUndo = useCallback(() => {
-    if (!note || undoStack.length === 0) return;
+    if (!note || undoStack.length === 0 || !editorRef.current) return;
     const prevContent = undoStack[undoStack.length - 1];
     setUndoStack((prev) => prev.slice(0, -1));
-    setRedoStack((prev) => [...prev, note.content]);
+    setRedoStack((prev) => [...prev, editorRef.current?.innerHTML || note.content]);
     lastContentRef.current = prevContent;
+    editorRef.current.innerHTML = prevContent;
     onUpdateNote(note.id, { content: prevContent });
   }, [note, undoStack, onUpdateNote]);
 
   const handleRedo = useCallback(() => {
-    if (!note || redoStack.length === 0) return;
+    if (!note || redoStack.length === 0 || !editorRef.current) return;
     const nextContent = redoStack[redoStack.length - 1];
     setRedoStack((prev) => prev.slice(0, -1));
-    setUndoStack((prev) => [...prev, note.content]);
+    setUndoStack((prev) => [...prev, editorRef.current?.innerHTML || note.content]);
     lastContentRef.current = nextContent;
+    editorRef.current.innerHTML = nextContent;
     onUpdateNote(note.id, { content: nextContent });
   }, [note, redoStack, onUpdateNote]);
 
-  // Insert formatting helper with smart toggle (wrap / unwrap)
-  const insertFormatting = useCallback((prefix: string, suffix: string = prefix, defaultText: string = '') => {
-    const textarea = textareaRef.current;
-    if (!note || !textarea) return;
-
-    const start = textarea.selectionStart;
-    const end = textarea.selectionEnd;
-    const selectedText = note.content.substring(start, end);
-    let newContent = '';
-    let newStart = start;
-    let newEnd = end;
-
-    if (!selectedText && defaultText && start === end) {
-      newContent = note.content.substring(0, start) + prefix + defaultText + suffix + note.content.substring(end);
-      newStart = start + prefix.length;
-      newEnd = newStart + defaultText.length;
-      pushToUndo(newContent);
-      onUpdateNote(note.id, { content: newContent });
-
-      setTimeout(() => {
-        textarea.focus();
-        textarea.setSelectionRange(newStart, newEnd);
-      }, 30);
-      return;
-    }
-
-    const hasInternalFormatting =
-      prefix &&
-      suffix &&
-      selectedText.length >= prefix.length + suffix.length &&
-      selectedText.startsWith(prefix) &&
-      selectedText.endsWith(suffix);
-
-    const beforeText = note.content.substring(Math.max(0, start - prefix.length), start);
-    const afterText = note.content.substring(end, Math.min(note.content.length, end + suffix.length));
-    const hasExternalFormatting = prefix && suffix && beforeText === prefix && afterText === suffix;
-
-    if (hasInternalFormatting) {
-      const unwrapped = selectedText.substring(prefix.length, selectedText.length - suffix.length);
-      newContent = note.content.substring(0, start) + unwrapped + note.content.substring(end);
-      newStart = start;
-      newEnd = start + unwrapped.length;
-    } else if (hasExternalFormatting) {
-      newContent =
-        note.content.substring(0, start - prefix.length) +
-        selectedText +
-        note.content.substring(end + suffix.length);
-      newStart = start - prefix.length;
-      newEnd = newStart + selectedText.length;
-    } else {
-      newContent =
-        note.content.substring(0, start) +
-        prefix +
-        selectedText +
-        suffix +
-        note.content.substring(end);
-      newStart = start + prefix.length;
-      newEnd = newStart + selectedText.length;
-    }
-
-    pushToUndo(newContent);
-    onUpdateNote(note.id, { content: newContent });
-
-    setTimeout(() => {
-      textarea.focus();
-      textarea.setSelectionRange(newStart, newEnd);
-    }, 30);
-  }, [note, pushToUndo, onUpdateNote]);
-
-  const insertLinePrefix = useCallback((prefix: string) => {
-    const textarea = textareaRef.current;
-    if (!note || !textarea) return;
-
-    const start = textarea.selectionStart;
-    const end = textarea.selectionEnd;
-    const lineStart = note.content.lastIndexOf('\n', start - 1) + 1;
-    const lineEnd = note.content.indexOf('\n', end);
-    const actualEnd = lineEnd === -1 ? note.content.length : lineEnd;
-
-    const currentLine = note.content.substring(lineStart, actualEnd);
-    let newContent = '';
-
-    if (currentLine.startsWith(prefix)) {
-      const updatedLine = currentLine.substring(prefix.length);
-      newContent = note.content.substring(0, lineStart) + updatedLine + note.content.substring(actualEnd);
-    } else {
-      const cleanedLine = currentLine.replace(/^(#{1,6}\s+|-\s*\[[ xX]\]\s*|[-*+]\s*|\d+\.\s*>*\s*)/, '');
-      newContent = note.content.substring(0, lineStart) + `${prefix}${cleanedLine}` + note.content.substring(actualEnd);
-    }
-
-    pushToUndo(newContent);
-    onUpdateNote(note.id, { content: newContent });
-
-    setTimeout(() => {
-      textarea.focus();
-      textarea.setSelectionRange(lineStart, lineStart + (newContent.length - note.content.length + currentLine.length));
-    }, 30);
-  }, [note, pushToUndo, onUpdateNote]);
-
-  const insertTimestamp = useCallback(() => {
-    const nowStr = `\n> 🕒 *${new Date().toLocaleString()}*\n`;
-    insertFormatting(nowStr, '');
-  }, [insertFormatting]);
+  // Rich Text Formatting Helper
+  const execCmd = useCallback((command: string, value: string | undefined = undefined) => {
+    if (!editorRef.current) return;
+    editorRef.current.focus();
+    document.execCommand(command, false, value);
+    handleEditorInput();
+  }, []);
 
   const insertTableTemplate = useCallback(() => {
-    const tableTemplate = `\n| Item | Description | Status |\n| :--- | :--- | :---: |\n| Task 1 | Feature implementation | 🚀 |\n| Task 2 | UI Polishing | 🎨 |\n`;
-    insertFormatting(tableTemplate, '');
-  }, [insertFormatting]);
+    const tableHtml = `
+      <div class="table-container my-3">
+        <table class="md-table border-collapse border border-[var(--border-color)] w-full text-xs">
+          <thead>
+            <tr class="bg-[var(--bg-tertiary)]">
+              <th class="md-th border border-[var(--border-color)] p-2 font-semibold">Header 1</th>
+              <th class="md-th border border-[var(--border-color)] p-2 font-semibold">Header 2</th>
+              <th class="md-th border border-[var(--border-color)] p-2 font-semibold">Header 3</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="md-td border border-[var(--border-color)] p-2">Item 1</td>
+              <td class="md-td border border-[var(--border-color)] p-2">Item 2</td>
+              <td class="md-td border border-[var(--border-color)] p-2">Item 3</td>
+            </tr>
+            <tr>
+              <td class="md-td border border-[var(--border-color)] p-2">Data A</td>
+              <td class="md-td border border-[var(--border-color)] p-2">Data B</td>
+              <td class="md-td border border-[var(--border-color)] p-2">Data C</td>
+            </tr>
+          </tbody>
+        </table>
+      </div><p><br></p>
+    `;
+    execCmd('insertHTML', tableHtml);
+  }, [execCmd]);
 
-  // Keyboard Event Handler for Editor (Auto-brackets, Tab indent, Enter list continuation, Ctrl+Z / Ctrl+Y)
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (!note) return;
-    const textarea = textareaRef.current;
-    if (!textarea) return;
+  const insertTimestamp = useCallback(() => {
+    const nowStr = `<p class="text-xs text-[var(--accent)] font-mono my-1">🕒 <em>${new Date().toLocaleString()}</em></p><p><br></p>`;
+    execCmd('insertHTML', nowStr);
+  }, [execCmd]);
 
-    const { selectionStart, selectionEnd } = textarea;
-    const isSelected = selectionStart !== selectionEnd;
-    const content = note.content;
+  const insertChecklistItem = useCallback(() => {
+    const taskHtml = `<div class="task-item flex items-center gap-2 my-1"><input type="checkbox" class="task-checkbox accent-[var(--accent)] cursor-pointer" /> <span contenteditable="true">New Task Item</span></div><p><br></p>`;
+    execCmd('insertHTML', taskHtml);
+  }, [execCmd]);
 
-    // Hotkeys: Ctrl+Z / Ctrl+Y
+  // Keyboard Shortcuts Handler
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
     if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 'z') {
       e.preventDefault();
       handleUndo();
@@ -271,6 +214,21 @@ export const Editor: React.FC<EditorProps> = ({
     if ((e.ctrlKey || e.metaKey) && (e.key.toLowerCase() === 'y' || (e.shiftKey && e.key.toLowerCase() === 'z'))) {
       e.preventDefault();
       handleRedo();
+      return;
+    }
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'b') {
+      e.preventDefault();
+      execCmd('bold');
+      return;
+    }
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'i') {
+      e.preventDefault();
+      execCmd('italic');
+      return;
+    }
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'u') {
+      e.preventDefault();
+      execCmd('underline');
       return;
     }
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f') {
@@ -285,258 +243,62 @@ export const Editor: React.FC<EditorProps> = ({
       setIsReplaceMode(true);
       return;
     }
-
-    // Tab / Shift+Tab Line Indentation
-    if (e.key === 'Tab') {
-      e.preventDefault();
-      const lineStart = content.lastIndexOf('\n', selectionStart - 1) + 1;
-      const lineEnd = content.indexOf('\n', selectionEnd);
-      const actualEnd = lineEnd === -1 ? content.length : lineEnd;
-      const selectedLines = content.substring(lineStart, actualEnd).split('\n');
-
-      let newLines: string[];
-      let diff = 0;
-
-      if (e.shiftKey) {
-        newLines = selectedLines.map((line) => {
-          if (line.startsWith('  ')) {
-            diff -= 2;
-            return line.substring(2);
-          } else if (line.startsWith(' ')) {
-            diff -= 1;
-            return line.substring(1);
-          }
-          return line;
-        });
-      } else {
-        newLines = selectedLines.map((line) => {
-          diff += 2;
-          return '  ' + line;
-        });
-      }
-
-      const newContent =
-        content.substring(0, lineStart) + newLines.join('\n') + content.substring(actualEnd);
-
-      pushToUndo(newContent);
-      onUpdateNote(note.id, { content: newContent });
-
-      setTimeout(() => {
-        textarea.focus();
-        if (isSelected) {
-          textarea.setSelectionRange(lineStart, Math.max(lineStart, selectionEnd + diff));
-        } else {
-          const newPos = Math.max(lineStart, selectionStart + (e.shiftKey ? -2 : 2));
-          textarea.setSelectionRange(newPos, newPos);
-        }
-      }, 10);
-      return;
-    }
-
-    // Smart Enter List Continuation
-    if (e.key === 'Enter') {
-      const lineStart = content.lastIndexOf('\n', selectionStart - 1) + 1;
-      const currentLine = content.substring(lineStart, selectionStart);
-
-      const indentMatch = currentLine.match(/^(\s*)/);
-      const indent = indentMatch ? indentMatch[1] : '';
-
-      const checkboxMatch = currentLine.match(/^(\s*-\s*\[[ xX]\]\s*)/);
-      const bulletMatch = currentLine.match(/^(\s*[-*+]\s*)/);
-      const numberMatch = currentLine.match(/^(\s*(\d+)\.\s*)/);
-
-      if (checkboxMatch) {
-        if (currentLine.trim() === '- [ ]' || currentLine.trim() === '- [x]') {
-          e.preventDefault();
-          const newContent = content.substring(0, lineStart) + content.substring(selectionStart);
-          pushToUndo(newContent);
-          onUpdateNote(note.id, { content: newContent });
-          setTimeout(() => textarea.setSelectionRange(lineStart, lineStart), 10);
-          return;
-        }
-        e.preventDefault();
-        const prefix = `\n${indent}- [ ] `;
-        const newContent = content.substring(0, selectionStart) + prefix + content.substring(selectionEnd);
-        pushToUndo(newContent);
-        onUpdateNote(note.id, { content: newContent });
-        setTimeout(() => textarea.setSelectionRange(selectionStart + prefix.length, selectionStart + prefix.length), 10);
-        return;
-      } else if (bulletMatch) {
-        if (currentLine.trim() === '-' || currentLine.trim() === '*' || currentLine.trim() === '+') {
-          e.preventDefault();
-          const newContent = content.substring(0, lineStart) + content.substring(selectionStart);
-          pushToUndo(newContent);
-          onUpdateNote(note.id, { content: newContent });
-          setTimeout(() => textarea.setSelectionRange(lineStart, lineStart), 10);
-          return;
-        }
-        e.preventDefault();
-        const prefix = `\n${indent}- `;
-        const newContent = content.substring(0, selectionStart) + prefix + content.substring(selectionEnd);
-        pushToUndo(newContent);
-        onUpdateNote(note.id, { content: newContent });
-        setTimeout(() => textarea.setSelectionRange(selectionStart + prefix.length, selectionStart + prefix.length), 10);
-        return;
-      } else if (numberMatch) {
-        const currentNum = parseInt(numberMatch[2], 10);
-        if (currentLine.trim() === `${currentNum}.`) {
-          e.preventDefault();
-          const newContent = content.substring(0, lineStart) + content.substring(selectionStart);
-          pushToUndo(newContent);
-          onUpdateNote(note.id, { content: newContent });
-          setTimeout(() => textarea.setSelectionRange(lineStart, lineStart), 10);
-          return;
-        }
-        e.preventDefault();
-        const prefix = `\n${indent}${currentNum + 1}. `;
-        const newContent = content.substring(0, selectionStart) + prefix + content.substring(selectionEnd);
-        pushToUndo(newContent);
-        onUpdateNote(note.id, { content: newContent });
-        setTimeout(() => textarea.setSelectionRange(selectionStart + prefix.length, selectionStart + prefix.length), 10);
-        return;
-      }
-    }
-
-    // Auto-Closing Pairs
-    const pairs: Record<string, string> = {
-      '(': ')',
-      '[': ']',
-      '{': '}',
-      '"': '"',
-      "'": "'",
-      '`': '`',
-    };
-
-    if (pairs[e.key]) {
-      const closing = pairs[e.key];
-
-      if (!isSelected && content.charAt(selectionStart) === e.key && (e.key === '"' || e.key === "'" || e.key === '`')) {
-        e.preventDefault();
-        setTimeout(() => textarea.setSelectionRange(selectionStart + 1, selectionStart + 1), 10);
-        return;
-      }
-
-      e.preventDefault();
-      const selectedText = content.substring(selectionStart, selectionEnd);
-      const newContent =
-        content.substring(0, selectionStart) +
-        e.key +
-        selectedText +
-        closing +
-        content.substring(selectionEnd);
-
-      pushToUndo(newContent);
-      onUpdateNote(note.id, { content: newContent });
-
-      setTimeout(() => {
-        textarea.focus();
-        if (isSelected) {
-          textarea.setSelectionRange(selectionStart + 1, selectionStart + 1 + selectedText.length);
-        } else {
-          textarea.setSelectionRange(selectionStart + 1, selectionStart + 1);
-        }
-      }, 10);
-      return;
-    }
-
-    // Backspace Pair Deletion
-    if (e.key === 'Backspace' && !isSelected && selectionStart > 0) {
-      const charBefore = content.charAt(selectionStart - 1);
-      const charAfter = content.charAt(selectionStart);
-
-      const isPair =
-        (charBefore === '(' && charAfter === ')') ||
-        (charBefore === '[' && charAfter === ']') ||
-        (charBefore === '{' && charAfter === '}') ||
-        (charBefore === '"' && charAfter === '"') ||
-        (charBefore === "'" && charAfter === "'") ||
-        (charBefore === '`' && charAfter === '`');
-
-      if (isPair) {
-        e.preventDefault();
-        const newContent = content.substring(0, selectionStart - 1) + content.substring(selectionStart + 1);
-        pushToUndo(newContent);
-        onUpdateNote(note.id, { content: newContent });
-        setTimeout(() => textarea.setSelectionRange(selectionStart - 1, selectionStart - 1), 10);
-        return;
-      }
-    }
   };
 
-  // Find & Replace helper methods
+  // Search & Replace logic
   const handleSearch = useCallback((query: string, matchCase: boolean) => {
     if (!note || !query) {
       setMatches([]);
       setCurrentMatchIdx(0);
       return;
     }
-
     const content = note.content;
-    const searchRegex = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), matchCase ? 'g' : 'gi');
-    const positions: number[] = [];
-    let match;
-
-    while ((match = searchRegex.exec(content)) !== null) {
-      positions.push(match.index);
+    const matchIndices: number[] = [];
+    try {
+      const flags = matchCase ? 'g' : 'gi';
+      const regex = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), flags);
+      let m;
+      while ((m = regex.exec(content)) !== null) {
+        matchIndices.push(m.index);
+      }
+    } catch {
+      // Invalid regex, ignore
     }
-
-    setMatches(positions);
+    setMatches(matchIndices);
     setCurrentMatchIdx(0);
-
-    if (positions.length > 0 && textareaRef.current) {
-      textareaRef.current.focus();
-      textareaRef.current.setSelectionRange(positions[0], positions[0] + query.length);
-    }
   }, [note]);
 
   const handleNavigateMatch = useCallback((direction: 'next' | 'prev') => {
-    if (matches.length === 0 || !textareaRef.current) return;
-    let nextIdx = direction === 'next' ? currentMatchIdx + 1 : currentMatchIdx - 1;
-    if (nextIdx >= matches.length) nextIdx = 0;
-    if (nextIdx < 0) nextIdx = matches.length - 1;
-
-    setCurrentMatchIdx(nextIdx);
-    const pos = matches[nextIdx];
-    textareaRef.current.focus();
-    textareaRef.current.setSelectionRange(pos, pos + (textareaRef.current.selectionEnd - textareaRef.current.selectionStart || 1));
-  }, [matches, currentMatchIdx]);
+    if (matches.length === 0) return;
+    if (direction === 'next') {
+      setCurrentMatchIdx((prev) => (prev + 1) % matches.length);
+    } else {
+      setCurrentMatchIdx((prev) => (prev - 1 + matches.length) % matches.length);
+    }
+  }, [matches]);
 
   const handleReplaceCurrent = useCallback((replaceText: string) => {
-    if (!note || matches.length === 0 || !textareaRef.current) return;
-    const pos = matches[currentMatchIdx];
-    const matchLen = textareaRef.current.selectionEnd - textareaRef.current.selectionStart || 1;
-
-    const newContent =
-      note.content.substring(0, pos) + replaceText + note.content.substring(pos + matchLen);
-
-    pushToUndo(newContent);
-    onUpdateNote(note.id, { content: newContent });
-  }, [note, matches, currentMatchIdx, pushToUndo, onUpdateNote]);
+    if (!note || matches.length === 0 || !editorRef.current) return;
+    const text = editorRef.current.innerText;
+    if (text) {
+      const updated = text.replace(text.substring(matches[currentMatchIdx], matches[currentMatchIdx] + 5), replaceText);
+      editorRef.current.innerText = updated;
+      handleEditorInput();
+    }
+  }, [note, matches, currentMatchIdx, handleEditorInput]);
 
   const handleReplaceAll = useCallback((replaceText: string) => {
-    if (!note || matches.length === 0) return;
-    const textarea = textareaRef.current;
-    const query = note.content.substring(
-      textarea?.selectionStart || 0,
-      textarea?.selectionEnd || 0
-    );
-
-    if (!query) return;
-    const newContent = note.content.replaceAll(query, replaceText);
-    pushToUndo(newContent);
-    onUpdateNote(note.id, { content: newContent });
-  }, [note, matches, pushToUndo, onUpdateNote]);
+    if (!note || matches.length === 0 || !editorRef.current) return;
+    const currentText = editorRef.current.innerText;
+    if (currentText) {
+      editorRef.current.innerText = currentText.replaceAll(currentText, replaceText);
+      handleEditorInput();
+    }
+  }, [note, matches, handleEditorInput]);
 
   const handleSelectHeader = useCallback((line: number) => {
-    if (!note || !textareaRef.current) return;
-    const lines = note.content.split('\n');
-    let charOffset = 0;
-    for (let i = 0; i < line - 1 && i < lines.length; i++) {
-      charOffset += lines[i].length + 1;
-    }
-
-    textareaRef.current.focus();
-    textareaRef.current.setSelectionRange(charOffset, charOffset + (lines[line - 1]?.length || 0));
+    if (!note || !editorRef.current) return;
+    editorRef.current.focus();
   }, [note]);
 
   const handleCanvasClick = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -551,6 +313,17 @@ export const Editor: React.FC<EditorProps> = ({
       }
     }
   };
+
+  // Listen for Escape key to exit Full Screen
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isFullScreen && onToggleFullScreen) {
+        onToggleFullScreen();
+      }
+    };
+    window.addEventListener('keydown', handleGlobalKeyDown);
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown);
+  }, [isFullScreen, onToggleFullScreen]);
 
   if (!note) {
     return (
@@ -573,20 +346,28 @@ export const Editor: React.FC<EditorProps> = ({
     dyslexic: 'font-dyslexic',
   };
 
-  const renderedHtml = renderMarkdown(note.content);
-
   return (
-    <div className={`flex-1 ${isFullScreen ? 'h-screen w-screen border-none rounded-none z-50' : 'h-[calc(100vh-4rem)]'} flex flex-col bg-[var(--bg-primary)] overflow-hidden relative`}>
-      {/* Floating Exit Full Screen Pill */}
+    <div className={`flex-1 ${isFullScreen ? 'fixed inset-0 z-50 h-screen w-screen' : 'h-[calc(100vh-4rem)]'} flex flex-col bg-[var(--bg-primary)] overflow-hidden relative`}>
+      {/* Sleek Full Screen Header Bar */}
       {isFullScreen && (
-        <div className="absolute top-4 right-6 z-50 transition-opacity opacity-40 hover:opacity-100 select-none">
+        <div className="h-12 px-6 bg-[var(--bg-secondary)]/90 backdrop-blur-md border-b border-[var(--border-color)] flex items-center justify-between z-50 shrink-0 shadow-sm">
+          <div className="flex items-center gap-2.5 truncate max-w-[70%]">
+            <span className="text-[10px] font-semibold text-[var(--accent)] font-mono uppercase tracking-wider bg-[var(--accent)]/15 px-2 py-0.5 rounded-md border border-[var(--accent)]/30">
+              Zen Mode
+            </span>
+            <h2 className="text-xs sm:text-sm font-semibold text-[var(--text-primary)] truncate">
+              {note.title || 'Untitled Note'}
+            </h2>
+          </div>
+
           <button
             onClick={onToggleFullScreen}
-            className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-black/70 text-white text-xs font-mono backdrop-blur-md border border-white/20 shadow-xl hover:bg-black/90 hover:scale-105 transition"
-            title="Exit Full Screen (Esc / F11)"
+            className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[var(--bg-tertiary)] text-[var(--text-primary)] text-xs font-medium border border-[var(--border-color)] hover:bg-rose-500/10 hover:text-rose-400 hover:border-rose-500/30 transition-all duration-200 shadow-sm group"
+            title="Exit Full Screen (Esc)"
           >
-            <Minimize2 className="w-3.5 h-3.5 text-amber-400" />
-            <span>Exit Full Screen (Esc)</span>
+            <Minimize2 className="w-3.5 h-3.5 text-[var(--accent)] group-hover:text-rose-400 transition" />
+            <span>Exit Full Screen</span>
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-black/20 font-mono text-[var(--text-muted)] border border-white/10">Esc</span>
           </button>
         </div>
       )}
@@ -602,7 +383,7 @@ export const Editor: React.FC<EditorProps> = ({
             className="w-full text-xl sm:text-2xl font-bold bg-transparent text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none tracking-tight pb-1 border-b border-transparent focus:border-[var(--accent)] transition-all duration-200"
           />
 
-          {/* Folder, Tags & View Mode Switcher */}
+          {/* Folder, Tags & Utilities Header */}
           <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-[var(--text-secondary)]">
             <div className="flex flex-wrap items-center gap-3">
               {/* Folder Selector */}
@@ -649,51 +430,8 @@ export const Editor: React.FC<EditorProps> = ({
               </div>
             </div>
 
-            {/* View Mode & Quick Utilities */}
+            {/* Quick Utilities */}
             <div className="flex items-center gap-2">
-              {/* View Mode Segmented Control */}
-              <div className="flex items-center p-0.5 rounded-lg bg-[var(--bg-tertiary)] border border-[var(--border-color)]">
-                <button
-                  onClick={() => onViewModeChange && onViewModeChange('edit')}
-                  className={`flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium transition ${
-                    viewMode === 'edit'
-                      ? 'bg-[var(--accent)] text-white shadow-sm'
-                      : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
-                  }`}
-                  title="Edit Mode (Markdown Editor)"
-                >
-                  <Edit3 className="w-3 h-3" />
-                  <span>Edit</span>
-                </button>
-                <button
-                  onClick={() => onViewModeChange && onViewModeChange('split')}
-                  className={`flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium transition ${
-                    viewMode === 'split'
-                      ? 'bg-[var(--accent)] text-white shadow-sm'
-                      : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
-                  }`}
-                  title="Split Mode (Editor + Preview Side-by-Side)"
-                >
-                  <Columns className="w-3 h-3" />
-                  <span>Split</span>
-                </button>
-                <button
-                  onClick={() => onViewModeChange && onViewModeChange('preview')}
-                  className={`flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium transition ${
-                    viewMode === 'preview'
-                      ? 'bg-[var(--accent)] text-white shadow-sm'
-                      : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
-                  }`}
-                  title="Preview Mode (Rendered View)"
-                >
-                  <Eye className="w-3 h-3" />
-                  <span>Preview</span>
-                </button>
-              </div>
-
-              <div className="w-px h-4 bg-[var(--border-color)]" />
-
-              {/* Utility Actions */}
               <button
                 onClick={onToggleFullScreen}
                 className={`p-1.5 rounded-lg border transition ${
@@ -745,7 +483,7 @@ export const Editor: React.FC<EditorProps> = ({
         </div>
       )}
 
-      {/* Formatting Toolbar with Undo / Redo (Hidden in Full Screen) */}
+      {/* Formatting Toolbar with Undo / Redo */}
       {!isFullScreen && (
         <div className="px-3 py-1.5 border-b border-[var(--border-color)] bg-[var(--bg-secondary)] flex items-center gap-1 overflow-x-auto select-none shrink-0">
           {/* Undo / Redo */}
@@ -767,114 +505,115 @@ export const Editor: React.FC<EditorProps> = ({
           </button>
           <div className="w-px h-4 bg-[var(--border-color)] mx-1" />
 
+          {/* Formatting Actions */}
           <button
-            onClick={() => insertFormatting('**', '**', 'bold text')}
-            className="p-1.5 rounded-lg hover:bg-white/10 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition"
-            title="Bold (**text**)"
+            onClick={() => execCmd('bold')}
+            className="p-1.5 rounded-lg hover:bg-white/10 text-[var(--text-secondary)] hover:text-[var(--text-primary)] font-bold transition"
+            title="Bold (Ctrl+B)"
           >
             <Bold className="w-3.5 h-3.5" />
           </button>
           <button
-            onClick={() => insertFormatting('*', '*', 'italic text')}
+            onClick={() => execCmd('italic')}
             className="p-1.5 rounded-lg hover:bg-white/10 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition"
-            title="Italic (*text*)"
+            title="Italic (Ctrl+I)"
           >
             <Italic className="w-3.5 h-3.5" />
           </button>
           <button
-            onClick={() => insertFormatting('~~', '~~', 'strikethrough')}
+            onClick={() => execCmd('strikeThrough')}
             className="p-1.5 rounded-lg hover:bg-white/10 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition"
-            title="Strikethrough (~~text~~)"
+            title="Strikethrough"
           >
             <Strikethrough className="w-3.5 h-3.5" />
           </button>
           <div className="w-px h-4 bg-[var(--border-color)] mx-1" />
 
           <button
-            onClick={() => insertLinePrefix('# ')}
+            onClick={() => execCmd('formatBlock', '<h1>')}
             className="p-1.5 rounded-lg hover:bg-white/10 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition"
-            title="Heading 1 (#)"
+            title="Heading 1"
           >
             <Heading1 className="w-3.5 h-3.5" />
           </button>
           <button
-            onClick={() => insertLinePrefix('## ')}
+            onClick={() => execCmd('formatBlock', '<h2>')}
             className="p-1.5 rounded-lg hover:bg-white/10 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition"
-            title="Heading 2 (##)"
+            title="Heading 2"
           >
             <Heading2 className="w-3.5 h-3.5" />
           </button>
           <button
-            onClick={() => insertLinePrefix('### ')}
+            onClick={() => execCmd('formatBlock', '<h3>')}
             className="p-1.5 rounded-lg hover:bg-white/10 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition"
-            title="Heading 3 (###)"
+            title="Heading 3"
           >
             <Heading3 className="w-3.5 h-3.5" />
           </button>
           <div className="w-px h-4 bg-[var(--border-color)] mx-1" />
 
           <button
-            onClick={() => insertLinePrefix('- [ ] ')}
+            onClick={insertChecklistItem}
             className="p-1.5 rounded-lg hover:bg-white/10 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition"
-            title="Checklist item (- [ ])"
+            title="Checklist item"
           >
             <CheckSquare className="w-3.5 h-3.5 text-emerald-400" />
           </button>
           <button
-            onClick={() => insertLinePrefix('- ')}
+            onClick={() => execCmd('insertUnorderedList')}
             className="p-1.5 rounded-lg hover:bg-white/10 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition"
-            title="Bullet list (-)"
+            title="Bullet list"
           >
             <List className="w-3.5 h-3.5" />
           </button>
           <button
-            onClick={() => insertLinePrefix('1. ')}
+            onClick={() => execCmd('insertOrderedList')}
             className="p-1.5 rounded-lg hover:bg-white/10 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition"
-            title="Numbered list (1.)"
+            title="Numbered list"
           >
             <ListOrdered className="w-3.5 h-3.5" />
           </button>
           <div className="w-px h-4 bg-[var(--border-color)] mx-1" />
 
           <button
-            onClick={() => insertFormatting('\n```ts\n', '\n```\n', '// Write code here')}
+            onClick={() => execCmd('formatBlock', '<pre>')}
             className="p-1.5 rounded-lg hover:bg-white/10 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition"
-            title="Code block (```)"
+            title="Code block"
           >
             <Code className="w-3.5 h-3.5 text-indigo-400" />
           </button>
           <button
-            onClick={() => insertLinePrefix('> ')}
+            onClick={() => execCmd('formatBlock', '<blockquote>')}
             className="p-1.5 rounded-lg hover:bg-white/10 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition"
-            title="Blockquote (>)"
+            title="Blockquote"
           >
             <Quote className="w-3.5 h-3.5" />
           </button>
           <button
             onClick={insertTableTemplate}
             className="p-1.5 rounded-lg hover:bg-white/10 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition"
-            title="Insert Markdown Table Grid"
+            title="Insert Table Grid"
           >
             <Table className="w-3.5 h-3.5 text-amber-400" />
           </button>
           <button
-            onClick={() => insertFormatting('\n---\n', '')}
+            onClick={() => execCmd('insertHorizontalRule')}
             className="p-1.5 rounded-lg hover:bg-white/10 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition"
-            title="Divider line (---)"
+            title="Divider line"
           >
             <Minus className="w-3.5 h-3.5" />
           </button>
           <button
             onClick={() => setIsLinkModalOpen(true)}
             className="p-1.5 rounded-lg hover:bg-white/10 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition"
-            title="Insert web link"
+            title="Insert link"
           >
             <Link className="w-3.5 h-3.5" />
           </button>
           <button
             onClick={() => fileInputRef.current?.click()}
             className="p-1.5 rounded-lg hover:bg-white/10 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition"
-            title="Attach File (Images, PDFs, Code, Screenshots)"
+            title="Attach File"
           >
             <Paperclip className="w-3.5 h-3.5 text-[var(--accent)]" />
           </button>
@@ -927,92 +666,80 @@ export const Editor: React.FC<EditorProps> = ({
         totalMatches={matches.length}
       />
 
-      {/* Main Workspace Area (Editor / Split / Preview + Outline Drawer) */}
+      {/* Main Workspace Area (Clean WYSIWYG ContentEditable Canvas) */}
       <div className="flex-1 flex overflow-hidden relative">
         <div className="flex-1 h-full flex overflow-hidden bg-[var(--bg-primary)] p-4">
           <div className={`${editorWidth === 'compact' ? 'max-w-2xl mx-auto' : editorWidth === 'comfortable' ? 'max-w-4xl mx-auto' : 'w-full'} flex-1 flex gap-4 h-full overflow-hidden`}>
             
-            {/* Raw Markdown Editor Pane (Visible in Edit & Split modes) */}
-            {(viewMode === 'edit' || viewMode === 'split') && (
-              <div className="flex-1 h-full flex flex-col min-w-0 bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-xl p-3 shadow-inner">
-                <textarea
-                  ref={textareaRef}
-                  value={note.content}
-                  onChange={(e) => handleContentChange(e.target.value)}
-                  onKeyDown={handleKeyDown}
-                  placeholder="Type your markdown content here..."
-                  className={`w-full h-full bg-transparent text-[var(--text-primary)] outline-none resize-none leading-relaxed text-sm ${fontClassMap[font] || 'font-sans'} placeholder:text-[var(--text-muted)]`}
-                />
-              </div>
-            )}
+            {/* Seamless Rich Text Editor */}
+            <div className="flex-1 h-full flex flex-col min-w-0 bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-xl p-5 shadow-inner overflow-y-auto">
+              <div
+                ref={editorRef}
+                contentEditable={true}
+                onInput={handleEditorInput}
+                onKeyDown={handleKeyDown}
+                onClick={handleCanvasClick}
+                className={`w-full h-full min-h-[300px] outline-none leading-relaxed text-sm ${fontClassMap[font] || 'font-sans'} text-[var(--text-primary)] markdown-preview`}
+                style={{ wordBreak: 'break-word' }}
+              />
 
-            {/* Rendered Live Markdown Preview Pane (Visible in Preview & Split modes) */}
-            {(viewMode === 'preview' || viewMode === 'split') && (
-              <div className="flex-1 h-full overflow-y-auto bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-xl p-4 shadow-inner">
-                <div
-                  ref={previewRef}
-                  onClick={handleCanvasClick}
-                  dangerouslySetInnerHTML={{ __html: renderedHtml }}
-                  className={`markdown-preview leading-relaxed text-sm ${fontClassMap[font] || 'font-sans'}`}
-                />
+              {/* Note Attachments Section */}
+              {note.attachments && note.attachments.length > 0 && (
+                <div className="border-t border-[var(--border-color)] pt-4 mt-6 space-y-2 select-none">
+                  <div className="text-xs font-semibold text-[var(--text-muted)] flex items-center gap-1.5 uppercase tracking-wider">
+                    <Paperclip className="w-3.5 h-3.5 text-[var(--accent)]" />
+                    <span>Attachments ({note.attachments.length})</span>
+                  </div>
 
-                {/* Note Attachments Section */}
-                {note.attachments && note.attachments.length > 0 && (
-                  <div className="border-t border-[var(--border-color)] pt-4 mt-6 space-y-2">
-                    <div className="text-xs font-semibold text-[var(--text-muted)] flex items-center gap-1.5 uppercase tracking-wider">
-                      <Paperclip className="w-3.5 h-3.5 text-[var(--accent)]" />
-                      <span>Attachments ({note.attachments.length})</span>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                      {note.attachments.map((att) => {
-                        const isImg = att.type.startsWith('image/');
-                        return (
-                          <div
-                            key={att.id}
-                            className="flex items-center justify-between p-2.5 rounded-xl bg-[var(--bg-tertiary)] border border-[var(--border-color)] text-xs group hover:border-[var(--accent)] transition"
-                          >
-                            <div className="flex items-center gap-2 truncate">
-                              {isImg ? (
-                                <ImageIcon className="w-4 h-4 text-emerald-400 shrink-0" />
-                              ) : (
-                                <File className="w-4 h-4 text-cyan-400 shrink-0" />
-                              )}
-                              <div className="truncate">
-                                <p className="font-medium text-[var(--text-primary)] truncate">{att.name}</p>
-                                <p className="text-[10px] text-[var(--text-muted)] font-mono">
-                                  {(att.size / 1024).toFixed(1)} KB
-                                </p>
-                              </div>
-                            </div>
-
-                            <div className="flex items-center gap-1 shrink-0">
-                              <a
-                                href={att.url}
-                                download={att.name}
-                                className="p-1 rounded hover:bg-white/10 text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
-                                title="Download Attachment"
-                              >
-                                <Download className="w-3.5 h-3.5" />
-                              </a>
-                              {onRemoveAttachment && (
-                                <button
-                                  onClick={() => onRemoveAttachment(note.id, att.id)}
-                                  className="p-1 rounded hover:bg-rose-500/20 text-[var(--text-muted)] hover:text-rose-400"
-                                  title="Delete Attachment"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </button>
-                              )}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {note.attachments.map((att) => {
+                      const isImg = att.type.startsWith('image/');
+                      return (
+                        <div
+                          key={att.id}
+                          className="flex items-center justify-between p-2.5 rounded-xl bg-[var(--bg-tertiary)] border border-[var(--border-color)] text-xs group hover:border-[var(--accent)] transition"
+                        >
+                          <div className="flex items-center gap-2 truncate">
+                            {isImg ? (
+                              <ImageIcon className="w-4 h-4 text-emerald-400 shrink-0" />
+                            ) : (
+                              <File className="w-4 h-4 text-cyan-400 shrink-0" />
+                            )}
+                            <div className="truncate">
+                              <p className="font-medium text-[var(--text-primary)] truncate">{att.name}</p>
+                              <p className="text-[10px] text-[var(--text-muted)] font-mono">
+                                {(att.size / 1024).toFixed(1)} KB
+                              </p>
                             </div>
                           </div>
-                        );
-                      })}
-                    </div>
+
+                          <div className="flex items-center gap-1 shrink-0">
+                            <a
+                              href={att.url}
+                              download={att.name}
+                              className="p-1 rounded hover:bg-white/10 text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+                              title="Download Attachment"
+                            >
+                              <Download className="w-3.5 h-3.5" />
+                            </a>
+                            {onRemoveAttachment && (
+                              <button
+                                onClick={() => onRemoveAttachment(note.id, att.id)}
+                                className="p-1 rounded hover:bg-rose-500/20 text-[var(--text-muted)] hover:text-rose-400"
+                                title="Delete Attachment"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
-                )}
-              </div>
-            )}
+                </div>
+              )}
+            </div>
+
           </div>
         </div>
 
@@ -1031,9 +758,9 @@ export const Editor: React.FC<EditorProps> = ({
         onClose={() => setIsLinkModalOpen(false)}
         onInsert={(url, text) => {
           if (text) {
-            insertFormatting(`[${text}](`, `)`, url);
+            execCmd('insertHTML', `<a href="${url}" target="_blank" class="md-link text-[var(--accent)] underline">${text}</a>`);
           } else {
-            insertFormatting(`[${url}](`, `)`);
+            execCmd('createLink', url);
           }
         }}
       />
