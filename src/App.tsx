@@ -11,6 +11,7 @@ import { Editor } from './components/Editor';
 import { FocusMode } from './components/FocusMode';
 import { CommandPalette } from './components/CommandPalette';
 import { ShortcutsModal } from './components/ShortcutsModal';
+import { PatchNotesModal } from './components/PatchNotesModal';
 import { Toast } from './components/Toast';
 
 export function App() {
@@ -67,6 +68,7 @@ export function App() {
   const [isShortcutsOpen, setIsShortcutsOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
+  const [isPatchNotesOpen, setIsPatchNotesOpen] = useState(false);
 
   // Apply theme — also makes body transparent for the acrylic theme
   useEffect(() => {
@@ -211,6 +213,7 @@ export function App() {
           activeNote={activeNote}
           onUpdateNote={updateNote}
           onOpenSettings={() => setIsSettingsOpen(true)}
+          onOpenPatchNotes={() => setIsPatchNotesOpen(true)}
           onOpenFile={handleOpenFile}
           onSaveFile={() => handleSaveFile(false)}
           onSaveFileAs={() => handleSaveFile(true)}
@@ -326,6 +329,11 @@ export function App() {
         isOpen={isTemplateModalOpen}
         onClose={() => setIsTemplateModalOpen(false)}
         onSelectTemplate={(templateType) => createNoteFromTemplate(templateType)}
+      />
+
+      <PatchNotesModal
+        isOpen={isPatchNotesOpen}
+        onClose={() => setIsPatchNotesOpen(false)}
       />
 
       <Toast toast={toast} onClose={() => setToast(null)} />

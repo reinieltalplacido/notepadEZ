@@ -11,7 +11,8 @@ function createWindow() {
     minWidth: 800,
     minHeight: 600,
     frame: false, // Frameless for Windows 11 tabs & titlebar
-    title: 'Notepad',
+    title: 'notepadEZ',
+    icon: path.join(__dirname, '../build/icon.ico'),
     transparent: true,
     vibrancy: 'acrylic',
     backgroundMaterial: 'acrylic',

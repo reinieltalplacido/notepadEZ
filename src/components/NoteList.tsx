@@ -172,7 +172,22 @@ export const NoteList: React.FC<NoteListProps> = ({
           notes.map((note) => {
             const isActive = activeNoteId === note.id;
             const folder = getFolder(note.folderId);
-            const excerpt = note.content.replace(/[#*`_>~]/g, '').trim().slice(0, 75);
+            const cleanExcerptText = note.content
+              .replace(/<style[\s\S]*?<\/style>/gi, '')
+              .replace(/<script[\s\S]*?<\/script>/gi, '')
+              .replace(/&nbsp;/gi, ' ')
+              .replace(/&amp;/gi, '&')
+              .replace(/&lt;/gi, '<')
+              .replace(/&gt;/gi, '>')
+              .replace(/&quot;/gi, '"')
+              .replace(/&#039;/gi, "'")
+              .replace(/<\/?[a-z0-9]+\b[^>]*>/gi, ' ')
+              .replace(/<\/?[a-z0-9]{1,10}(?=\s|[A-Z0-9]|$)/gi, ' ')
+              .replace(/[<>]/g, ' ')
+              .replace(/[#*`_>~]/g, '')
+              .replace(/\s+/g, ' ')
+              .trim();
+            const excerpt = cleanExcerptText.slice(0, 85);
 
             return (
               <div

@@ -1,6 +1,6 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { Note, Folder, Tag, NoteRevision, AttachmentFile } from '../types/note';
-import { renderMarkdown } from '../utils/markdown';
+import { renderMarkdown, escapeHtml } from '../utils/markdown';
 import { StatsBar } from './StatsBar';
 import { FindReplaceBar } from './FindReplaceBar';
 import { OutlinePanel } from './OutlinePanel';
@@ -89,15 +89,50 @@ export const Editor: React.FC<EditorProps> = ({
   const currentNoteIdRef = useRef<string | null>(null);
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Helper to format content as HTML if raw markdown is passed
+  // Helper to format content as HTML if raw markdown is passed or wrapped in div
   const formatInitialHtml = (rawContent: string): string => {
     if (!rawContent) return '';
-    // If it already looks like HTML (has HTML tags), return as is
-    if (/<[a-z][\s\S]*>/i.test(rawContent)) {
-      return rawContent;
+
+    let content = rawContent;
+
+    // If content was previously saved with escaped HTML tags (&lt;div&gt;, &lt;p&gt;, &lt;h1&gt;, &amp;nbsp;)
+    if (/&lt;\/?(div|p|h[1-6]|span|br|pre|code|table|tr|td|th|ul|ol|li)\b.*?&gt;/i.test(content)) {
+      content = content
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&amp;nbsp;/g, '&nbsp;')
+        .replace(/&amp;amp;/g, '&amp;')
+        .replace(/&quot;/g, '"')
+        .replace(/&#039;/g, "'");
     }
-    // Otherwise convert markdown to HTML for rich text display
-    return renderMarkdown(rawContent);
+
+    // Fix malformed tag boundaries like <divSEMINAR -> <div>SEMINAR
+    content = content.replace(/<\/?[a-z0-9]{1,10}(?=[A-Z])/g, (match) => {
+      const tagName = match.replace(/[^a-z0-9]/gi, '').toLowerCase();
+      return `<${tagName}>`;
+    });
+
+    // Check if content contains unrendered raw markdown tags (# Heading, ## Heading, ```code)
+    const normalizedText = content
+      .replace(/<div>/gi, '\n')
+      .replace(/<\/div>/gi, '')
+      .replace(/<p>/gi, '\n')
+      .replace(/<\/p>/gi, '')
+      .replace(/<br\s*\/?>/gi, '\n')
+      .replace(/&nbsp;/gi, ' ');
+
+    if (/(^|\n)#{1,6}\s+|(^|\n)```|(^|\n)-\s+\[|(^|\n)>\s+/.test(normalizedText)) {
+      const plainMarkdown = normalizedText.replace(/<[^>]*>/g, '').trim();
+      return renderMarkdown(plainMarkdown);
+    }
+
+    // If it already contains HTML elements (div, p, h1-h6, pre, table, etc.), return directly as HTML
+    if (/<(div|p|h[1-6]|pre|table|ul|ol|blockquote|span|br)\b[^>]*>/i.test(content)) {
+      return content;
+    }
+
+    // Otherwise render markdown string to HTML
+    return renderMarkdown(content);
   };
 
   // Sync editor innerHTML when activeNote changes
@@ -244,6 +279,31 @@ export const Editor: React.FC<EditorProps> = ({
       return;
     }
   };
+
+  // Smart Markdown & Text Paste Handler
+  const handlePaste = useCallback((e: React.ClipboardEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    const plainText = e.clipboardData.getData('text/plain');
+    const htmlData = e.clipboardData.getData('text/html');
+
+    if (!plainText) return;
+
+    // Check if plain text contains Markdown formatting tags (#, ##, ```, lists, bold, blockquotes, tables)
+    const hasMarkdown = /(^|\n)#{1,6}\s+|(^|\n)```|(^|\n)-\s+|(^|\n)\*\s+|(^|\n)\d+\.\s+|(^|\n)>\s+|\*\*|__|~~|\|/.test(plainText);
+
+    if (hasMarkdown) {
+      const formattedHtml = renderMarkdown(plainText);
+      document.execCommand('insertHTML', false, formattedHtml);
+    } else if (htmlData && !htmlData.includes('class="markdown-preview"')) {
+      document.execCommand('insertHTML', false, htmlData);
+    } else {
+      // Plain text paste: convert line breaks into clean paragraph elements
+      const lines = plainText.split('\n');
+      const formattedLines = lines.map((line) => line.trim() ? `<p>${escapeHtml(line)}</p>` : '<p><br></p>').join('');
+      document.execCommand('insertHTML', false, formattedLines);
+    }
+    handleEditorInput();
+  }, [handleEditorInput]);
 
   // Search & Replace logic
   const handleSearch = useCallback((query: string, matchCase: boolean) => {
@@ -678,6 +738,7 @@ export const Editor: React.FC<EditorProps> = ({
                 contentEditable={true}
                 onInput={handleEditorInput}
                 onKeyDown={handleKeyDown}
+                onPaste={handlePaste}
                 onClick={handleCanvasClick}
                 className={`w-full h-full min-h-[300px] outline-none leading-relaxed text-sm ${fontClassMap[font] || 'font-sans'} text-[var(--text-primary)] markdown-preview`}
                 style={{ wordBreak: 'break-word' }}

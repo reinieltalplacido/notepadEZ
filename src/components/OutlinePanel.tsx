@@ -28,10 +28,21 @@ export const OutlinePanel: React.FC<OutlinePanelProps> = ({
     const items: OutlineItem[] = [];
 
     lines.forEach((lineText, index) => {
-      const match = lineText.match(/^(#{1,6})\s+(.+)$/);
-      if (match) {
-        const level = match[1].length;
-        const text = match[2].trim().replace(/[*_~`]/g, ''); // strip basic formatting
+      const htmlMatch = lineText.match(/<h([1-6])\b[^>]*>(.*?)<\/h\1>/i);
+      const mdMatch = lineText.match(/^(#{1,6})\s+(.+)$/);
+
+      let level = 0;
+      let text = '';
+
+      if (htmlMatch) {
+        level = parseInt(htmlMatch[1], 10);
+        text = htmlMatch[2].replace(/<[^>]+>/g, '').trim();
+      } else if (mdMatch) {
+        level = mdMatch[1].length;
+        text = mdMatch[2].trim().replace(/[*_~`]/g, '');
+      }
+
+      if (text && level > 0) {
         items.push({
           id: `heading-${index}-${level}`,
           level,

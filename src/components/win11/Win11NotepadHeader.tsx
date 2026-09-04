@@ -9,6 +9,7 @@ import {
   Minus,
   Square,
   Sidebar as SidebarIcon,
+  Sparkles,
 } from 'lucide-react';
 
 interface Win11NotepadHeaderProps {
@@ -21,6 +22,7 @@ interface Win11NotepadHeaderProps {
   activeNote: Note | null;
   onUpdateNote: (id: string, updates: Partial<Note>) => void;
   onOpenSettings: () => void;
+  onOpenPatchNotes?: () => void;
   onOpenFile: () => void;
   onSaveFile: () => void;
   onSaveFileAs: () => void;
@@ -41,6 +43,7 @@ export const Win11NotepadHeader: React.FC<Win11NotepadHeaderProps> = ({
   activeNote,
   onUpdateNote,
   onOpenSettings,
+  onOpenPatchNotes,
   onOpenFile,
   onSaveFile,
   onSaveFileAs,
@@ -48,7 +51,7 @@ export const Win11NotepadHeader: React.FC<Win11NotepadHeaderProps> = ({
   isSidebarOpen,
   onOpenFocusMode,
 }) => {
-  const [activeMenu, setActiveMenu] = useState<'file' | 'edit' | 'view' | null>(null);
+  const [activeMenu, setActiveMenu] = useState<'file' | 'edit' | 'view' | 'help' | null>(null);
   const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
   const [tabContextMenu, setTabContextMenu] = useState<{ id: string; x: number; y: number } | null>(null);
 
@@ -91,13 +94,17 @@ export const Win11NotepadHeader: React.FC<Win11NotepadHeaderProps> = ({
 
 
 
+  const isElectron = typeof window !== 'undefined' && Boolean(window.electronAPI);
+  const dragStyle = isElectron ? ({ WebkitAppRegion: 'drag' } as any) : undefined;
+  const noDragStyle = isElectron ? ({ WebkitAppRegion: 'no-drag' } as any) : undefined;
+
   return (
     <header className="bg-[var(--bg-secondary)] border-b border-[var(--border-color)] select-none sticky top-0 z-40">
-      <div className="h-10 px-2 flex items-center justify-between border-b border-[var(--border-color)] bg-[var(--bg-primary)]" style={{ WebkitAppRegion: 'drag' } as any}>
+      <div className="h-10 px-2 flex items-center justify-between border-b border-[var(--border-color)] bg-[var(--bg-primary)]" style={dragStyle}>
         <div className="flex items-center gap-1 overflow-x-auto flex-1 h-full pt-1">
           <button
             onClick={onToggleSidebar}
-            style={{ WebkitAppRegion: 'no-drag' } as any}
+            style={noDragStyle}
             className={`p-1.5 rounded-lg text-xs transition mr-1.5 ${
               isSidebarOpen
                 ? 'bg-[var(--accent)] text-white'
@@ -127,7 +134,7 @@ export const Win11NotepadHeader: React.FC<Win11NotepadHeaderProps> = ({
                     e.stopPropagation();
                     setTabContextMenu({ id: note.id, x: e.clientX, y: e.clientY });
                   }}
-                  style={{ WebkitAppRegion: 'no-drag' } as any}
+                  style={noDragStyle}
                   className={`h-8 px-2.5 rounded-t-xl text-xs font-medium flex items-center gap-1.5 border-t-2 border-x transition-all cursor-pointer group shrink-0 ${
                     isActive
                       ? 'bg-[var(--bg-secondary)] text-[var(--text-primary)] border-t-[var(--accent)] border-x-[var(--border-color)] shadow-md font-semibold'
@@ -160,7 +167,7 @@ export const Win11NotepadHeader: React.FC<Win11NotepadHeaderProps> = ({
               e.stopPropagation();
               setIsTemplateModalOpen(true);
             }}
-            style={{ WebkitAppRegion: 'no-drag' } as any}
+            style={noDragStyle}
             className="px-2.5 py-1 text-xs text-white bg-[var(--accent)] hover:bg-[var(--accent-hover)] font-medium flex items-center gap-1 rounded-lg shadow-md shadow-[var(--accent-glow)] transition ml-1 shrink-0"
             title="Create New Note (Choose Template or Blank Note)"
           >
@@ -169,16 +176,33 @@ export const Win11NotepadHeader: React.FC<Win11NotepadHeaderProps> = ({
           </button>
         </div>
 
-        <div className="flex items-center" style={{ WebkitAppRegion: 'no-drag' } as any}>
-          <button onClick={onOpenSettings} className="p-2 text-[var(--text-secondary)] hover:bg-white/10 hover:text-[var(--text-primary)] transition" title="Settings (⚙️)"><Settings className="w-3.5 h-3.5" /></button>
-          <button onClick={handleMinimize} className="p-2 px-3 text-[var(--text-secondary)] hover:bg-white/10 transition"><Minus className="w-3.5 h-3.5" /></button>
-          <button onClick={handleMaximize} className="p-2 px-3 text-[var(--text-secondary)] hover:bg-white/10 transition"><Square className="w-3 h-3" /></button>
-          <button onClick={handleClose} className="p-2 px-3 text-[var(--text-secondary)] hover:bg-rose-600 hover:text-white transition"><X className="w-3.5 h-3.5" /></button>
+        <div className="flex items-center gap-1" style={noDragStyle}>
+          {onOpenPatchNotes && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onOpenPatchNotes();
+              }}
+              className="px-2 py-1 text-xs font-medium text-[var(--accent)] hover:bg-[var(--accent)]/10 rounded-lg flex items-center gap-1.5 transition cursor-pointer"
+              title="What's New / Patch Notes"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-[var(--accent)] animate-pulse" />
+              <span className="hidden sm:inline">What's New</span>
+            </button>
+          )}
+          <button onClick={onOpenSettings} className="p-2 text-[var(--text-secondary)] hover:bg-white/10 hover:text-[var(--text-primary)] transition cursor-pointer" title="Settings (⚙️)"><Settings className="w-3.5 h-3.5" /></button>
+          {isElectron && (
+            <>
+              <button onClick={handleMinimize} className="p-2 px-3 text-[var(--text-secondary)] hover:bg-white/10 transition"><Minus className="w-3.5 h-3.5" /></button>
+              <button onClick={handleMaximize} className="p-2 px-3 text-[var(--text-secondary)] hover:bg-white/10 transition"><Square className="w-3 h-3" /></button>
+              <button onClick={handleClose} className="p-2 px-3 text-[var(--text-secondary)] hover:bg-rose-600 hover:text-white transition"><X className="w-3.5 h-3.5" /></button>
+            </>
+          )}
         </div>
       </div>
 
-      <div ref={headerMenuRef} className="h-7 px-3 flex items-center gap-1 text-xs text-[var(--text-secondary)] bg-[var(--bg-secondary)] relative" style={{ WebkitAppRegion: 'drag' } as any}>
-        <div className="relative" style={{ WebkitAppRegion: 'no-drag' } as any}>
+      <div ref={headerMenuRef} className="h-7 px-3 flex items-center gap-1 text-xs text-[var(--text-secondary)] bg-[var(--bg-secondary)] relative" style={dragStyle}>
+        <div className="relative" style={noDragStyle}>
           <button onClick={() => setActiveMenu(activeMenu === 'file' ? null : 'file')} className="px-2.5 py-0.5 rounded hover:bg-white/10 hover:text-[var(--text-primary)] transition font-medium">File</button>
           {activeMenu === 'file' && (
             <div className="absolute left-0 mt-1 w-48 py-1 rounded-xl glass-panel border border-[var(--border-highlight)] shadow-2xl z-50 text-xs">
@@ -189,7 +213,7 @@ export const Win11NotepadHeader: React.FC<Win11NotepadHeaderProps> = ({
             </div>
           )}
         </div>
-        <div className="relative" style={{ WebkitAppRegion: 'no-drag' } as any}>
+        <div className="relative" style={noDragStyle}>
           <button onClick={() => setActiveMenu(activeMenu === 'edit' ? null : 'edit')} className="px-2.5 py-0.5 rounded hover:bg-white/10 hover:text-[var(--text-primary)] transition font-medium">Edit</button>
           {activeMenu === 'edit' && (
             <div className="absolute left-0 mt-1 w-48 py-1 rounded-xl glass-panel border border-[var(--border-highlight)] shadow-2xl z-50 text-xs">
@@ -197,12 +221,22 @@ export const Win11NotepadHeader: React.FC<Win11NotepadHeaderProps> = ({
             </div>
           )}
         </div>
-        <div className="relative" style={{ WebkitAppRegion: 'no-drag' } as any}>
+        <div className="relative" style={noDragStyle}>
           <button onClick={() => setActiveMenu(activeMenu === 'view' ? null : 'view')} className="px-2.5 py-0.5 rounded hover:bg-white/10 hover:text-[var(--text-primary)] transition font-medium">View</button>
           {activeMenu === 'view' && (
             <div className="absolute left-0 mt-1 w-48 py-1 rounded-xl glass-panel border border-[var(--border-highlight)] shadow-2xl z-50 text-xs">
               <button onClick={() => { onToggleSidebar(); setActiveMenu(null); }} className="w-full text-left px-3 py-1.5 hover:bg-white/10 flex justify-between"><span>Toggle Navigation (Ctrl+B)</span></button>
               <button onClick={() => { onOpenFocusMode(); setActiveMenu(null); }} className="w-full text-left px-3 py-1.5 hover:bg-white/10 flex justify-between"><span>Focus Mode</span></button>
+            </div>
+          )}
+        </div>
+        <div className="relative" style={noDragStyle}>
+          <button onClick={() => setActiveMenu(activeMenu === 'help' ? null : 'help')} className="px-2.5 py-0.5 rounded hover:bg-white/10 hover:text-[var(--text-primary)] transition font-medium">Help</button>
+          {activeMenu === 'help' && (
+            <div className="absolute left-0 mt-1 w-48 py-1 rounded-xl glass-panel border border-[var(--border-highlight)] shadow-2xl z-50 text-xs">
+              {onOpenPatchNotes && (
+                <button onClick={() => { onOpenPatchNotes(); setActiveMenu(null); }} className="w-full text-left px-3 py-1.5 hover:bg-white/10 flex justify-between items-center"><span>What's New / Patch Notes</span><Sparkles className="w-3 h-3 text-[var(--accent)]" /></button>
+              )}
             </div>
           )}
         </div>

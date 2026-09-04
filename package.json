@@ -16,7 +16,8 @@
   },
   "build": {
     "appId": "com.notepadez.app",
-    "productName": "Notepad",
+    "productName": "notepadEZ",
+    "icon": "build/icon.ico",
     "directories": {
       "output": "release"
     },
@@ -25,10 +26,15 @@
       "electron/**/*"
     ],
     "win": {
+      "icon": "build/icon.ico",
       "target": [
         "nsis",
         "portable"
       ]
+    },
+    "nsis": {
+      "shortcutName": "notepadEZ",
+      "uninstallDisplayName": "notepadEZ"
     }
   },
   "dependencies": {

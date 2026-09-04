@@ -30,7 +30,17 @@ Ensure you have the following installed on your system:
 - **Node.js**: `v18.0.0` or higher ([Download Node.js](https://nodejs.org/))
 - **npm**: `v9.0.0` or higher (comes with Node.js)
 
-### 📥 Installation
+### ⚡ Quick Install (Windows PowerShell)
+
+Run this single command in **PowerShell** to automatically download and install the latest desktop version of **notepadEZ**:
+
+```powershell
+irm https://raw.githubusercontent.com/reinieltalplacido/notepadEZ/main/install.ps1 | iex
+```
+
+---
+
+### 📥 Manual & Development Setup
 
 1. **Clone the Repository**:
 
